@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Mole Desktop",
+  "version": "0.1.0",
+  "identifier": "com.moledesk.app",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Mole Desktop",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 960,
+        "minHeight": 620,
+        "center": true,
+        "backgroundColor": "#0d0f13"
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Utility",
+    "shortDescription": "Clean, analyze and monitor your computer",
+    "longDescription": "Mole Desktop is a cross-platform desktop toolkit for cleaning caches, uninstalling apps, analyzing disk usage and monitoring system health.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

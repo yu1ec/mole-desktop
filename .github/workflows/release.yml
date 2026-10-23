@@ -1,0 +1,176 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            rust_targets: aarch64-apple-darwin,x86_64-apple-darwin
+            tauri_args: '--target universal-apple-darwin --no-sign'
+          - platform: windows-latest
+            rust_targets: ''
+            tauri_args: '--target x86_64-pc-windows-msvc --no-sign'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          # The Tauri crate lives in src-tauri; its target dir is src-tauri/target.
+          workspaces: 'src-tauri -> target'
+          cache-on-failure: true
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Validate version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          CARGO_VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | cut -d'"' -f2)
+          TAURI_VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          NPM_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$CARGO_VERSION" ] || [ "$TAG_VERSION" != "$TAURI_VERSION" ] || [ "$TAG_VERSION" != "$NPM_VERSION" ]; then
+            echo "Version mismatch:"
+            echo "  tag:   $TAG_VERSION"
+            echo "  cargo: $CARGO_VERSION"
+            echo "  tauri: $TAURI_VERSION"
+            echo "  npm:   $NPM_VERSION"
+            exit 1
+          fi
+          echo "Version OK: $TAG_VERSION"
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: .
+          # Use the @tauri-apps/cli pinned in package-lock.json.
+          tauriScript: npm run tauri
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ${{ github.ref_type == 'tag' && format('Mole Desktop {0}', github.ref_name) || '' }}
+          releaseBody: |
+            ## Mole Desktop ${{ github.ref_name }}
+
+            ### 下载
+            - `Mole-Desktop-macos-universal.dmg` — macOS（Universal，Apple Silicon + Intel）
+            - `Mole-Desktop-windows-x86_64.msi` — Windows（x86_64）
+            - `Mole-Desktop-windows-x86_64-setup.exe` — Windows NSIS 安装器
+
+            > macOS 安装包为 ad-hoc 签名（未公证）。首次打开如提示“无法验证开发者”，
+            > 请到「系统设置 → 隐私与安全性」点击「仍要打开」，或执行
+            > `xattr -dr com.apple.quarantine "/Applications/Mole Desktop.app"`。
+          releaseDraft: false
+          prerelease: false
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: false
+          args: ${{ matrix.tauri_args }}
+
+      - name: Publish stable asset names
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ matrix.platform }}" = "macos-latest" ]; then
+            triple="universal-apple-darwin"
+          else
+            triple="x86_64-pc-windows-msvc"
+          fi
+
+          bundle_root="src-tauri/target/${triple}/release/bundle"
+          if [ ! -d "$bundle_root" ]; then
+            echo "Bundle directory not found: $bundle_root" >&2
+            find src-tauri/target -type d -name bundle 2>/dev/null | sed 's/^/  /' || true
+            exit 1
+          fi
+          echo "Using bundle root: $bundle_root"
+
+          case "${{ matrix.platform }}" in
+            macos-latest)
+              dmg=$(find "$bundle_root/dmg" -name '*.dmg' -type f | head -1)
+              app=$(find "$bundle_root/macos" -maxdepth 1 -name '*.app' -type d | head -1)
+              if [ -z "$dmg" ] || [ -z "$app" ]; then
+                echo "DMG or .app not found under $bundle_root" >&2
+                exit 1
+              fi
+              # Ad-hoc sign the bundle so Apple Silicon can launch it. This does not
+              # make Gatekeeper trust the app, but it avoids the "damaged" error.
+              codesign --force --deep --sign - "$app"
+              codesign --verify --deep --strict "$app"
+              codesign -dv "$app" 2>&1 | sed 's/^/  /'
+              # Rebuild the DMG from the signed bundle.
+              staging=/tmp/mole-desktop-dmg
+              rm -rf "$staging"
+              mkdir -p "$staging"
+              cp -R "$app" "$staging/"
+              ln -s /Applications "$staging/Applications"
+              hdiutil create -volname "Mole Desktop" -srcfolder "$staging" \
+                -ov -format UDZO /tmp/Mole-Desktop-macos-universal.dmg
+              # Replace the unsigned DMG uploaded by tauri-action, then publish the stable name.
+              cp /tmp/Mole-Desktop-macos-universal.dmg "/tmp/$(basename "$dmg")"
+              gh release upload "${{ github.ref_name }}" "/tmp/$(basename "$dmg")" --clobber
+              gh release upload "${{ github.ref_name }}" /tmp/Mole-Desktop-macos-universal.dmg --clobber
+              ;;
+            windows-latest)
+              msi=$(find "$bundle_root/msi" -name '*.msi' -type f | head -1)
+              if [ -n "$msi" ]; then
+                cp "$msi" /tmp/Mole-Desktop-windows-x86_64.msi
+                gh release upload "${{ github.ref_name }}" /tmp/Mole-Desktop-windows-x86_64.msi --clobber
+              fi
+              setup=$(find "$bundle_root/nsis" -name '*-setup.exe' -type f | head -1)
+              if [ -n "$setup" ]; then
+                cp "$setup" /tmp/Mole-Desktop-windows-x86_64-setup.exe
+                gh release upload "${{ github.ref_name }}" /tmp/Mole-Desktop-windows-x86_64-setup.exe --clobber
+              fi
+              if [ -z "$msi" ] && [ -z "$setup" ]; then
+                echo "No MSI/NSIS installer found under $bundle_root" >&2
+                exit 1
+              fi
+              ;;
+          esac
+
+      - name: Upload workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mole-desktop-${{ matrix.platform }}
+          path: |
+            src-tauri/target/**/release/bundle/**/*.dmg
+            src-tauri/target/**/release/bundle/**/*.msi
+            src-tauri/target/**/release/bundle/**/*-setup.exe
+          if-no-files-found: warn

@@ -1,0 +1,141 @@
+Mole Desktop License
+Version 1.0, 23 October 2026
+
+Copyright (c) 2026 yu1ec ("the Author")
+
+This License governs the use of the software, source code, documentation and
+other materials made available in the Mole Desktop project (the "Software").
+The Software is source-available, not open source: non-commercial use is free,
+and commercial use is permitted only with the attribution required below.
+
+1. DEFINITIONS
+
+1.1 "Project Name" means the name "Mole Desktop", together with the canonical
+    project repository URL where the Software is published.
+
+1.2 "Non-Commercial Use" means use for personal learning, self-use, academic
+    research, teaching, evaluation, or by a non-profit organization, in each
+    case not primarily intended for or directed toward commercial advantage or
+    monetary compensation.
+
+1.3 "Commercial Use" means any use that is not Non-Commercial Use. It includes,
+    without limitation:
+    (a) selling, licensing, renting or otherwise distributing the Software or a
+        derivative work for a fee;
+    (b) offering the Software or a derivative work as a hosted, managed or
+        subscription service;
+    (c) bundling or embedding the Software or a derivative work into a product
+        or service for which consideration is received;
+    (d) use by a for-profit entity in developing or operating products or
+        services delivered to paying customers.
+
+1.4 "Derivative Work" means any work based on or incorporating the Software,
+    in whole or in part, including modifications, forks, translations and
+    combinations with other software.
+
+2. GRANT FOR NON-COMMERCIAL USE
+
+Subject to Sections 4 and 5, the Author grants you a perpetual, worldwide,
+royalty-free, non-exclusive license to reproduce, modify, prepare Derivative
+Works of, and distribute the Software and Derivative Works, for Non-Commercial
+Use, without charge.
+
+3. GRANT FOR COMMERCIAL USE
+
+Subject to Sections 4, 6 and 7, the Author grants you the same rights as in
+Section 2 for Commercial Use, provided that you comply with the attribution
+requirements in Section 6.
+
+4. GENERAL CONDITIONS
+
+4.1 You must retain, in all copies and Derivative Works of the Software, the
+    copyright notice above, this License, and all notices of the Project Name
+    contained in the Software.
+
+4.2 You must give any recipient of the Software or a Derivative Work a copy of
+    this License.
+
+4.3 You must cause any modified files to carry prominent notices stating that
+    you changed the files and the date of any change.
+
+5. NO TRADEMARK LICENSE
+
+This License does not grant any right to use the Author's names, logos or
+trademarks, except for the attribution required by Section 6. You may not
+state or imply that the Author endorses or sponsors you or your product.
+
+6. ATTRIBUTION REQUIREMENT FOR COMMERCIAL USE
+
+If you make Commercial Use of the Software, you must:
+
+6.1 Prominently display the Project Name "Mole Desktop" and the canonical
+    repository URL in:
+    (a) the "About", "Credits" or equivalent screen of any application that
+        incorporates the Software;
+    (b) the README or equivalent documentation of any Derivative Work you
+        distribute; and
+    (c) any distribution page, website or app store listing used to offer the
+        product or service.
+
+6.2 Retain all copyright notices and this License in the source code and in
+    any binary distribution's accompanying files or documentation.
+
+6.3 Not remove, obscure, minimize or alter the Project Name or attribution
+    notices.
+
+6.4 You may rebrand or rename a Derivative Work, provided that the attribution
+    required by this Section remains clear and visible, for example in the form
+    "Based on Mole Desktop (https://github.com/...)" or "Powered by Mole
+    Desktop".
+
+7. COMMERCIAL USE WITHOUT ATTRIBUTION
+
+Commercial Use without the attribution described in Section 6 requires the
+Author's prior written permission. Requests may be made through the project
+repository's issue tracker or other contact channel published by the Author.
+
+8. TERMINATION
+
+8.1 This License terminates automatically if you breach any of its terms.
+
+8.2 If you cure the breach within thirty (30) days after becoming aware of it,
+    this License is reinstated as of the date of the breach.
+
+8.3 On termination you must stop all use and distribution of the Software and
+    destroy or delete all copies in your possession or control, except copies
+    that must be retained to comply with applicable law.
+
+9. DISCLAIMER OF WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE AND NON-INFRINGEMENT. THE AUTHOR DOES
+NOT WARRANT THAT THE SOFTWARE WILL BE ERROR-FREE OR THAT ITS OPERATION WILL BE
+UNINTERRUPTED.
+
+10. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE AUTHOR
+BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+11. THIRD-PARTY COMPONENTS
+
+The Software contains or depends on third-party components that are governed by
+their own licenses. Those licenses continue to apply to the respective
+components, and nothing in this License limits your rights under them.
+
+12. GENERAL
+
+12.1 If any provision of this License is held unenforceable, the remaining
+     provisions remain in full force and effect.
+
+12.2 Failure to enforce a provision is not a waiver of the right to enforce it
+     later.
+
+12.3 This License is the entire agreement between you and the Author regarding
+     its subject matter and supersedes any prior agreements on that subject.
+
+12.4 You may not impose any additional or different terms on recipients of the
+     Software.
