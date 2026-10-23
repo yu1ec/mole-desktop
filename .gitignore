@@ -2,3 +2,7 @@ dist
 node_modules
 src-tauri/target
 .DS_Store
+# 自签名证书与私钥，绝不入库
+.signing
+*.p12
+*.p12.b64

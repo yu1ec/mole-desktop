@@ -3,6 +3,7 @@ pub mod apps;
 pub mod clean;
 pub mod misc;
 pub mod optimize;
+pub mod permissions;
 pub mod projects;
 pub mod system;
 pub mod update;

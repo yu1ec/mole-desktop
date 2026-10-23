@@ -2442,6 +2442,11 @@ section {
   margin-bottom: 3px;
 }
 
+.setting-body label .badge {
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+
 .setting-body p {
   margin: 0 0 9px;
 }
@@ -2849,6 +2854,100 @@ section {
 
 .tone-danger {
   color: var(--danger);
+}
+
+/* ------------------------------- permissions ----------------------------- */
+
+.permission-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-color: rgba(255, 196, 107, 0.24);
+  background: linear-gradient(180deg, rgba(255, 196, 107, 0.07), rgba(20, 24, 31, 0.94));
+}
+
+.permission-card > .icon-btn {
+  flex: none;
+}
+
+.permission-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--warn);
+  background: rgba(255, 196, 107, 0.12);
+}
+
+.permission-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.permission-main strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.permission-main p {
+  margin: 3px 0 0;
+  max-width: 760px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.permission-main p.permission-hint {
+  color: var(--warn);
+  opacity: 0.85;
+}
+
+.permission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+}
+
+.permission-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.permission-folder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.permission-folder strong {
+  font-weight: 550;
+  color: var(--text);
+  flex: none;
+}
+
+.permission-folder code {
+  flex: 1;
+  min-width: 0;
+  font-size: 10.5px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.permission-folder .badge {
+  flex: none;
 }
 
 /* ---------------------------------- toast -------------------------------- */

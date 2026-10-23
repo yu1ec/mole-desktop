@@ -20,6 +20,7 @@ import {
   Spinner,
   useToast,
 } from "../components/ui";
+import { PermissionNotice } from "../components/PermissionNotice";
 
 const KIND_LABEL: Record<string, string> = {
   cache: "缓存",
@@ -153,6 +154,8 @@ export function Uninstall() {
           刷新列表
         </Button>
       </header>
+
+      <PermissionNotice />
 
       {error && <Card className="error-card">{error}</Card>}
 

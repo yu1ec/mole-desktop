@@ -84,6 +84,20 @@ npm run app:build
 
 首次运行会触发通知、磁盘访问等系统授权，请按提示允许。
 
+### macOS 权限
+
+应用只在真正需要读取目录时请求权限，不会在启动时弹窗：
+
+- **文件与文件夹**（桌面 / 文稿 / 下载 / 外接磁盘）：第一次扫描到这些目录时，macOS 会自动弹出授权提示。用途说明定义在 `src-tauri/Info.plist`。
+- **完全磁盘访问**：macOS 不允许应用通过弹窗申请该权限。磁盘分析、项目清理等页面会在缺失权限时显示提示卡片，可一键打开「系统设置 → 隐私与安全性 → 完全磁盘访问」，把 Mole Desktop 拖入列表即可。
+- **授权后必须重启应用**：macOS 会缓存当前进程的拒绝结果，勾选完全磁盘访问后当前进程仍会读到旧状态，请点提示卡片里的「重启应用」。从系统设置切回窗口时也会自动重新检测。
+- 开发模式下系统会把权限记在终端或调试器名下；测试授权行为请使用打包后的 `.app`。
+- 正式发布包使用固定证书签名，签名身份跨版本不变，升级后已授权的权限会保留。只有在你更换证书、改用 ad-hoc 签名的本地构建，或系统仍沿用旧的拒绝记录时，才需要执行：
+
+```bash
+tccutil reset SystemPolicyAllFiles com.moledesk.app
+```
+
 ### Windows
 
 ```bash
@@ -127,11 +141,53 @@ make release TYPE=patch
 git push origin HEAD --tags
 ```
 
-macOS 产物为 ad-hoc 签名（未公证）。首次打开如提示“无法验证开发者”，请到「系统设置 → 隐私与安全性」点击「仍要打开」，或执行：
+### macOS 代码签名（自签名）
+
+没有 Apple Developer 账号（$99/年）时，项目使用一张固定的自签名证书，而不是 ad-hoc 签名。两者都过不了 Gatekeeper，但：
+
+- ad-hoc 签名的 designated requirement 里是本次构建的 cdhash，**每次发版都会变**，用户必须重新授权完全磁盘访问；
+- 固定证书的 requirement 是 `bundle id + 证书指纹`，**跨版本稳定**，权限不会重置。
+
+签名**不会**让 Gatekeeper 放行。首次打开仍提示“无法验证开发者”，需到「系统设置 → 隐私与安全性」点击「仍要打开」。macOS 15 起已取消右键打开的绕过方式。
+
+生成证书（只需做一次）：
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/Mole Desktop.app"
+bash scripts/macos-signing-cert.sh --import
 ```
+
+脚本会在 `.signing/`（已 gitignore）生成证书和私钥，并把证书导入本机 keychain 供本地构建使用。随后把三个值写进 GitHub Secrets：
+
+```bash
+gh secret set MACOS_CERT_P12 < .signing/cert.p12.b64
+gh secret set MACOS_CERT_PASSWORD --body "$(cat .signing/p12-password.txt)"
+gh secret set MACOS_SIGNING_IDENTITY --body "Mole Desktop Signing"
+```
+
+CI 会用这些 secrets 创建临时 keychain 并签名。**请离线备份 `.signing/cert.pem` 和 `.signing/key.pem`**；证书丢失或更换会导致已安装用户的系统授权再次重置。
+
+本地带签名构建：
+
+```bash
+APPLE_SIGNING_IDENTITY="Mole Desktop Signing" make build-app SIGN=1
+```
+
+验证签名身份是否稳定：
+
+```bash
+codesign -d -r- "/Applications/Mole Desktop.app"
+# designated => identifier "com.moledesk.app" and certificate root = H"..."
+```
+
+只要这条 requirement 不变，TCC 授权就会跨版本保留。
+
+从旧的 ad-hoc 版本升级上来的用户，系统里记录的还是旧的 cdhash，需要一次性重新授权：
+
+```bash
+tccutil reset SystemPolicyAllFiles com.moledesk.app
+```
+
+然后重新在「系统设置 → 隐私与安全性 → 完全磁盘访问」里勾选。仅此一次，之后的版本不需要再操作。
 
 ## 安全设计
 

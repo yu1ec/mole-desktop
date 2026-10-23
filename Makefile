@@ -37,6 +37,8 @@ ARCH ?= $(HOST_ARCH)
 
 # SIGN=0 (default) passes --no-sign to tauri build
 SIGN ?= 0
+# SIGN=1 时使用的签名身份（证书 CN），留空则由 tauri 自动选择
+SIGN_IDENTITY ?=
 
 # INIT_TARGETS=all adds all common rustup targets during init
 INIT_TARGETS ?= current
@@ -66,6 +68,7 @@ help:
 	@echo "  ARCH        Target arch: arm64 | x86_64 | universal  (default: $(HOST_ARCH))"
 	@echo "  BUNDLES     Installer types (default per OS)"
 	@echo "  SIGN        1=enable signing, 0=--no-sign  (default: 0)"
+	@echo "  SIGN_IDENTITY  Signing identity CN, e.g. \"Mole Desktop Signing\" (macOS)"
 	@echo "  INIT_TARGETS  current | all  (default: current)"
 	@echo "  TYPE        Release bump type: patch | minor | major (for release)"
 	@echo "  DRY_RUN     1=preview release without changing files"
@@ -180,6 +183,7 @@ build-app: check-app-host
 	if [ -n "$(BUNDLES)" ]; then bundles="$(BUNDLES)"; fi; \
 	sign_args=""; \
 	if [ "$(SIGN)" != "1" ]; then sign_args="--no-sign"; fi; \
+	if [ -n "$(SIGN_IDENTITY)" ]; then export APPLE_SIGNING_IDENTITY="$(SIGN_IDENTITY)"; fi; \
 	echo "==> Building $(APP_NAME) for $(OS)/$(ARCH) ($$triple)"; \
 	echo "    bundles: $$bundles"; \
 	$(CARGO) tauri build --target $$triple --bundles $$bundles $$sign_args; \

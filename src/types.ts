@@ -199,6 +199,25 @@ export interface AppInfo {
   dataDir: string;
 }
 
+export interface PermissionFolder {
+  key: string;
+  label: string;
+  path: string;
+  exists: boolean;
+  /** null 表示尚未探测，避免仅打开页面就触发系统授权弹窗 */
+  granted: boolean | null;
+}
+
+export interface DiskPermissionStatus {
+  platform: string;
+  supported: boolean;
+  fullDiskAccess: boolean;
+  /** 是否运行在 .app 包内；开发模式下权限记在终端/IDE 名下 */
+  bundled: boolean;
+  appPath: string;
+  folders: PermissionFolder[];
+}
+
 export type PageKey =
   | "dashboard"
   | "clean"

@@ -12,6 +12,7 @@ import {
   Spinner,
   useToast,
 } from "../components/ui";
+import { PermissionNotice } from "../components/PermissionNotice";
 
 export function Installers() {
   const toast = useToast();
@@ -82,6 +83,8 @@ export function Installers() {
           </Button>
         </div>
       </header>
+
+      <PermissionNotice />
 
       {error && <Card className="error-card">{error}</Card>}
 

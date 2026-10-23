@@ -12,6 +12,7 @@ import { api } from "../api";
 import { formatBytes } from "../format";
 import type { AnalyzeReport } from "../types";
 import { Button, Card, EmptyState, Spinner, useToast } from "../components/ui";
+import { PermissionNotice } from "../components/PermissionNotice";
 import { Treemap } from "../components/Treemap";
 
 function breadcrumbs(path: string): { label: string; value: string }[] {
@@ -90,6 +91,8 @@ export function Analyze() {
           </Button>
         </div>
       </header>
+
+      <PermissionNotice />
 
       <Card className="analyze-bar">
         <div className="path-input">

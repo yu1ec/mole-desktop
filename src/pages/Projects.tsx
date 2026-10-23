@@ -12,6 +12,7 @@ import {
   Spinner,
   useToast,
 } from "../components/ui";
+import { PermissionNotice } from "../components/PermissionNotice";
 
 export function Projects() {
   const toast = useToast();
@@ -96,6 +97,8 @@ export function Projects() {
           </Button>
         </div>
       </header>
+
+      <PermissionNotice />
 
       <Card className="roots-card">
         <div>

@@ -5,15 +5,19 @@ import {
   ExternalLink,
   FolderCog,
   FolderOpen,
+  FolderSearch,
   Info,
   RefreshCw,
+  RotateCcw,
   Save,
+  ShieldAlert,
   ShieldCheck,
   Terminal,
 } from "lucide-react";
 import { api } from "../api";
 import type {
   AppInfo,
+  DiskPermissionStatus,
   Settings,
   UpdateCheckResult,
   UpdateDownloadProgress,
@@ -27,6 +31,7 @@ import {
   Spinner,
   useToast,
 } from "../components/ui";
+import { PermissionRestartModal, usePermissionRestart } from "../components/permissionRestart";
 import { formatBytes, formatSpeed } from "../format";
 
 const RELEASES_URL = "https://github.com/yu1ec/mole-desktop/releases/latest";
@@ -43,6 +48,16 @@ export function SettingsPage() {
   const [installing, setInstalling] = useState(false);
   const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [permission, setPermission] = useState<DiskPermissionStatus | null>(null);
+  const [probing, setProbing] = useState(false);
+  const [checkingPermission, setCheckingPermission] = useState(false);
+  const {
+    open: restartPromptOpen,
+    close: closeRestartPrompt,
+    restart,
+    restarting,
+    expectRestart,
+  } = usePermissionRestart();
 
   useEffect(() => {
     Promise.all([api.appInfo(), api.settings()])
@@ -54,6 +69,78 @@ export function SettingsPage() {
       .catch((err) => toast(String(err), "error"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    api
+      .diskPermission()
+      .then(setPermission)
+      .catch(() => {});
+  }, []);
+
+  // 从系统设置切回窗口时静默刷新权限状态。
+  useEffect(() => {
+    const recheck = () => {
+      if (document.visibilityState === "visible") {
+        api
+          .diskPermission()
+          .then(setPermission)
+          .catch(() => {});
+      }
+    };
+    window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", recheck);
+    return () => {
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", recheck);
+    };
+  }, []);
+
+  const openFullDiskAccessSettings = () => {
+    expectRestart();
+    api
+      .openPrivacySettings("full-disk-access")
+      .catch((err) => toast(String(err), "error"));
+  };
+
+  const refreshPermission = async () => {
+    setCheckingPermission(true);
+    try {
+      const next = await api.diskPermission();
+      setPermission(next);
+      toast(
+        next.fullDiskAccess
+          ? "已检测到完全磁盘访问权限"
+          : "仍未检测到完全磁盘访问；若刚刚在系统设置中勾选，请重启应用",
+        next.fullDiskAccess ? "success" : "info",
+      );
+    } catch (err) {
+      toast(String(err), "error");
+    } finally {
+      setCheckingPermission(false);
+    }
+  };
+
+  const probeFolders = async () => {
+    setProbing(true);
+    try {
+      const folders = await api.requestFileAccess();
+      setPermission((current) => (current ? { ...current, folders } : current));
+      const denied = folders.filter((folder) => folder.granted === false);
+      const granted = folders.filter((folder) => folder.granted === true);
+      if (denied.length > 0) {
+        toast(
+          `未获得 ${denied.map((folder) => folder.label).join("、")} 的访问权限，可在系统设置中开启`,
+          "error",
+        );
+      } else if (granted.length > 0) {
+        toast(`已获得 ${granted.map((folder) => folder.label).join("、")} 的访问权限`, "success");
+      }
+    } catch (err) {
+      toast(String(err), "error");
+    } finally {
+      setProbing(false);
+    }
+  };
 
   const save = async () => {
     if (!settings) return;
@@ -186,6 +273,120 @@ export function SettingsPage() {
         </Card>
       </section>
 
+      {permission?.supported && (
+        <section>
+          <SectionTitle title="隐私与权限" hint="扫描磁盘与读取下载、桌面等目录时的系统授权" />
+          <Card className="settings-card">
+            <div className="setting-row">
+              <span className="setting-icon">
+                {permission.fullDiskAccess ? <ShieldCheck size={18} /> : <ShieldAlert size={18} />}
+              </span>
+              <div className="setting-body">
+                <label>
+                  完全磁盘访问
+                  <span className={`badge ${permission.fullDiskAccess ? "badge-ok" : "badge-warn"}`}>
+                    {permission.fullDiskAccess ? "已授权" : "未授权"}
+                  </span>
+                </label>
+                <p className="small muted">
+                  磁盘分析、项目清理和卸载残留扫描需要读取受保护目录。macOS 不允许应用弹窗申请完全磁盘访问，
+                  需要点击下方按钮，在系统设置中手动添加本应用；授权后需重启应用才会生效。
+                </p>
+                {!permission.bundled && (
+                  <p className="small muted">
+                    当前为开发模式（未打包），macOS 会把权限记在启动本应用的终端/IDE 名下。
+                    请为对应程序授权，或使用打包后的 .app 验证。
+                  </p>
+                )}
+                <div className="path-box" title={permission.appPath}>
+                  {permission.appPath}
+                </div>
+                <div className="permission-folders">
+                  {permission.folders
+                    .filter((folder) => folder.exists)
+                    .map((folder) => (
+                      <div className="permission-folder" key={folder.key}>
+                        <strong>{folder.label}</strong>
+                        <code title={folder.path}>{folder.path}</code>
+                        <span
+                          className={`badge ${
+                            folder.granted === true
+                              ? "badge-ok"
+                              : folder.granted === false
+                                ? "badge-warn"
+                                : ""
+                          }`}
+                        >
+                          {folder.granted === true
+                            ? "已允许"
+                            : folder.granted === false
+                              ? "未允许"
+                              : "未检测"}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+              <div className="setting-actions">
+                <Button
+                  size="sm"
+                  icon={<FolderSearch size={14} />}
+                  loading={probing}
+                  onClick={() => void probeFolders()}
+                >
+                  允许文件访问
+                </Button>
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  icon={<FolderOpen size={14} />}
+                  onClick={() =>
+                    api
+                      .openPrivacySettings("files-and-folders")
+                      .catch((err) => toast(String(err), "error"))
+                  }
+                >
+                  文件与文件夹
+                </Button>
+                <Button
+                  size="sm"
+                  icon={<ShieldCheck size={14} />}
+                  onClick={openFullDiskAccessSettings}
+                >
+                  完全磁盘访问
+                </Button>
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  icon={<ExternalLink size={14} />}
+                  onClick={() => api.revealApp().catch((err) => toast(String(err), "error"))}
+                >
+                  在 Finder 中显示
+                </Button>
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  icon={<RotateCcw size={14} />}
+                  loading={restarting}
+                  onClick={() => void restart()}
+                >
+                  重启应用
+                </Button>
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  icon={<RefreshCw size={14} />}
+                  loading={checkingPermission}
+                  onClick={() => void refreshPermission()}
+                >
+                  重新检查
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </section>
+      )}
+
       <section>
         <SectionTitle title="数据与隐私" hint="所有记录都保存在本机" />
         <Card className="settings-card">
@@ -317,6 +518,13 @@ export function SettingsPage() {
           </div>
         </Card>
       </section>
+
+      <PermissionRestartModal
+        open={restartPromptOpen}
+        onClose={closeRestartPrompt}
+        onRestart={() => void restart()}
+        restarting={restarting}
+      />
     </div>
   );
 }

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>Mole Desktop 需要读取桌面，用于分析磁盘占用和查找安装包。</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Mole Desktop 需要读取文稿目录，用于分析磁盘占用和清理项目构建产物。</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>Mole Desktop 需要读取下载目录，用于分析磁盘占用和查找安装包。</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>Mole Desktop 需要读取外接磁盘，用于分析其空间占用。</string>
+	<key>NSNetworkVolumesUsageDescription</key>
+	<string>Mole Desktop 需要读取网络宗卷，用于分析其空间占用。</string>
+</dict>
+</plist>

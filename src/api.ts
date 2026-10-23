@@ -4,12 +4,14 @@ import type {
   AppEntry,
   AppInfo,
   CleanScan,
+  DiskPermissionStatus,
   HistoryEntry,
   InstallerFile,
   Leftover,
   OperationResult,
   OptimizeResult,
   OptimizeTask,
+  PermissionFolder,
   ProjectArtifact,
   Settings,
   SystemSnapshot,
@@ -56,4 +58,11 @@ export const api = {
   reveal: (path: string) => invoke<void>("reveal_path", { path }),
   openExternal: (path: string) => invoke<void>("open_external", { path }),
   openDataDir: () => invoke<void>("open_data_dir"),
+
+  diskPermission: () => invoke<DiskPermissionStatus>("disk_permission_status"),
+  requestFileAccess: () => invoke<PermissionFolder[]>("request_file_access"),
+  openPrivacySettings: (pane: "full-disk-access" | "files-and-folders" | "removable-volumes") =>
+    invoke<void>("open_privacy_settings", { pane }),
+  revealApp: () => invoke<void>("reveal_app"),
+  restartApp: () => invoke<void>("restart_app"),
 };

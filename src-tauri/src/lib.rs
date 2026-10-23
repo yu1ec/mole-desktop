@@ -46,6 +46,11 @@ pub fn run() {
             commands::misc::save_settings,
             commands::misc::open_data_dir,
             commands::misc::open_external,
+            commands::permissions::disk_permission_status,
+            commands::permissions::request_file_access,
+            commands::permissions::open_privacy_settings,
+            commands::permissions::reveal_app,
+            commands::permissions::restart_app,
             commands::update::check_for_update,
             commands::update::download_and_install_update,
         ])

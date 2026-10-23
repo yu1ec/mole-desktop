@@ -1,6 +1,6 @@
 [package]
 name = "mole-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cross-platform desktop cleaner and system toolkit"
 authors = ["Mole Desktop"]
 edition = "2021"

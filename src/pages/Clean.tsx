@@ -19,6 +19,7 @@ import {
   Spinner,
   useToast,
 } from "../components/ui";
+import { PermissionNotice } from "../components/PermissionNotice";
 
 export function Clean() {
   const toast = useToast();
@@ -127,6 +128,8 @@ export function Clean() {
           </Button>
         </div>
       </header>
+
+      <PermissionNotice />
 
       {error && <Card className="error-card">{error}</Card>}
 
