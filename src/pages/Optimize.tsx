@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -8,6 +8,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { api } from "../api";
+import { useCachedQuery } from "../cache";
 import type { OptimizeResult, OptimizeTask } from "../types";
 import {
   Button,
@@ -19,33 +20,45 @@ import {
   useToast,
 } from "../components/ui";
 
+const EMPTY_TASKS: OptimizeTask[] = [];
+
 export function Optimize() {
   const toast = useToast();
-  const [tasks, setTasks] = useState<OptimizeTask[]>([]);
+  const {
+    data: taskData,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useCachedQuery<OptimizeTask[]>("optimize-tasks", api.optimizeTasks, {
+    ttl: 5 * 60_000,
+  });
+  const tasks = taskData ?? EMPTY_TASKS;
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState<OptimizeResult | null>(null);
-  const [error, setError] = useState("");
+  const initialized = useRef(false);
 
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await api.optimizeTasks();
-      setTasks(data);
-      setSelected(new Set(data.filter((task) => !task.danger && !task.requiresAdmin).map((task) => task.id)));
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Task definitions rarely change; default-select safe tasks only once.
   useEffect(() => {
-    load();
-  }, []);
+    if (!taskData) return;
+    if (!initialized.current) {
+      initialized.current = true;
+      setSelected(
+        new Set(
+          taskData.filter((task) => !task.danger && !task.requiresAdmin).map((task) => task.id),
+        ),
+      );
+      return;
+    }
+    setSelected((current) => {
+      const ids = new Set(taskData.map((task) => task.id));
+      return new Set([...current].filter((id) => ids.has(id)));
+    });
+  }, [taskData]);
+
+  const load = () => refresh({ force: true });
 
   const hasDanger = tasks.some((task) => selected.has(task.id) && task.danger);
 
@@ -76,7 +89,7 @@ export function Optimize() {
           <p>刷新缓存与服务，修复常见的系统小问题</p>
         </div>
         <div className="head-actions">
-          <Button icon={<RefreshCw size={16} />} onClick={load} loading={loading}>
+          <Button icon={<RefreshCw size={16} />} onClick={load} loading={loading || refreshing}>
             刷新
           </Button>
           <Button

@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FolderOpen, Package, RefreshCw, Trash2 } from "lucide-react";
 import { api } from "../api";
+import { useCachedQuery } from "../cache";
 import { formatBytes, relativeTime } from "../format";
 import type { InstallerFile, OperationResult } from "../types";
 import {
@@ -14,33 +15,39 @@ import {
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
 
+const EMPTY_FILES: InstallerFile[] = [];
+
 export function Installers() {
   const toast = useToast();
-  const [files, setFiles] = useState<InstallerFile[]>([]);
+  const {
+    data: fileData,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useCachedQuery<InstallerFile[]>("installers", api.listInstallers, { ttl: 30_000 });
+  const files = fileData ?? EMPTY_FILES;
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState<OperationResult | null>(null);
-  const [error, setError] = useState("");
+  const initialized = useRef(false);
 
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await api.listInstallers();
-      setFiles(data);
-      setSelected(new Set(data.map((file) => file.path)));
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Select everything once; keep the user's edits across background refreshes.
   useEffect(() => {
-    load();
-  }, []);
+    if (!fileData) return;
+    if (!initialized.current) {
+      initialized.current = true;
+      setSelected(new Set(fileData.map((file) => file.path)));
+      return;
+    }
+    setSelected((current) => {
+      const paths = new Set(fileData.map((file) => file.path));
+      return new Set([...current].filter((path) => paths.has(path)));
+    });
+  }, [fileData]);
+
+  const load = () => refresh({ force: true });
 
   const selectedItems = files.filter((file) => selected.has(file.path));
   const selectedSize = selectedItems.reduce((total, file) => total + file.size, 0);
@@ -69,7 +76,11 @@ export function Installers() {
           <p>找出下载目录、桌面与缓存中的 DMG、PKG、MSI 等安装文件</p>
         </div>
         <div className="head-actions">
-          <Button icon={<RefreshCw size={16} />} onClick={load} loading={loading}>
+          <Button
+            icon={<RefreshCw size={16} />}
+            onClick={load}
+            loading={loading || refreshing}
+          >
             重新扫描
           </Button>
           <Button

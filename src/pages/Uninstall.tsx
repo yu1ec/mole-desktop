@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AppWindow,
   Box,
@@ -9,6 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { api } from "../api";
+import { invalidateCachePrefix, useCachedQuery } from "../cache";
 import { formatBytes, relativeTime } from "../format";
 import type { AppEntry, Leftover, OperationResult } from "../types";
 import {
@@ -33,64 +34,64 @@ const KIND_LABEL: Record<string, string> = {
   other: "其他",
 };
 
+const EMPTY_APPS: AppEntry[] = [];
+const EMPTY_LEFTOVERS: Leftover[] = [];
+
 export function Uninstall() {
   const toast = useToast();
-  const [apps, setApps] = useState<AppEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const {
+    data: appData,
+    loading,
+    refreshing,
+    error,
+    refresh: refreshApps,
+  } = useCachedQuery<AppEntry[]>("apps", api.listApps, { ttl: 30_000 });
+  const apps = appData ?? EMPTY_APPS;
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"size" | "name">("size");
   const [active, setActive] = useState<AppEntry | null>(null);
-  const [leftovers, setLeftovers] = useState<Leftover[]>([]);
-  const [leftoversLoading, setLeftoversLoading] = useState(false);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [permanent, setPermanent] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<OperationResult | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await api.listApps();
-      setApps(data);
-      setActive((current) => {
-        if (current && data.some((app) => app.id === current.id)) return current;
-        return data[0] ?? null;
-      });
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    load();
-  }, []);
+    if (!appData) return;
+    setActive((current) =>
+      current && appData.some((app) => app.id === current.id) ? current : appData[0] ?? null,
+    );
+  }, [appData]);
 
+  const leftoversKey = active ? `app-leftovers:${active.id}` : null;
+  const { data: leftoverData, loading: leftoversLoading } = useCachedQuery<Leftover[]>(
+    leftoversKey,
+    () => api.appLeftovers(active?.id ?? ""),
+    { ttl: 30_000 },
+  );
+  const leftovers = leftoverData ?? EMPTY_LEFTOVERS;
+  const lastLeftoverKey = useRef<string | null>(null);
+
+  // Recommend items on first visit; keep manual choices when the app list refreshes.
   useEffect(() => {
-    if (!active) {
-      setLeftovers([]);
+    if (!leftoversKey) {
+      lastLeftoverKey.current = null;
       setChecked(new Set());
       return;
     }
-    let alive = true;
-    setLeftoversLoading(true);
-    api
-      .appLeftovers(active.id)
-      .then((items) => {
-        if (!alive) return;
-        setLeftovers(items);
-        setChecked(new Set(items.filter((item) => item.recommended).map((item) => item.path)));
-      })
-      .catch(() => alive && setLeftovers([]))
-      .finally(() => alive && setLeftoversLoading(false));
-    return () => {
-      alive = false;
-    };
-  }, [active]);
+    if (!leftoverData) return;
+    if (lastLeftoverKey.current !== leftoversKey) {
+      lastLeftoverKey.current = leftoversKey;
+      setChecked(
+        new Set(leftoverData.filter((item) => item.recommended).map((item) => item.path)),
+      );
+      return;
+    }
+    setChecked((current) => {
+      const paths = new Set(leftoverData.map((item) => item.path));
+      return new Set([...current].filter((path) => paths.has(path)));
+    });
+  }, [leftoversKey, leftoverData]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -120,8 +121,9 @@ export function Uninstall() {
       const data = await api.uninstallApp(active.id, [...checked], permanent);
       setResult(data);
       toast(`${active.name} 已处理完成`, "success");
+      invalidateCachePrefix("app-leftovers:");
       setActive(null);
-      await load();
+      await refreshApps({ force: true });
     } catch (err) {
       toast(String(err), "error");
     } finally {
@@ -150,7 +152,11 @@ export function Uninstall() {
             {apps.length > 0 ? ` · ${apps.length} 个应用 · ${formatBytes(totalSize)}` : ""}
           </p>
         </div>
-        <Button icon={<RefreshCw size={16} />} onClick={load} loading={loading}>
+        <Button
+          icon={<RefreshCw size={16} />}
+          onClick={() => refreshApps({ force: true })}
+          loading={loading || refreshing}
+        >
           刷新列表
         </Button>
       </header>

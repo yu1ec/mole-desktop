@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -7,6 +7,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { api } from "../api";
+import { useCachedQuery } from "../cache";
 import { formatBytes, formatDate } from "../format";
 import type { CleanItem, CleanScan, OperationResult } from "../types";
 import {
@@ -23,37 +24,37 @@ import { PermissionNotice } from "../components/PermissionNotice";
 
 export function Clean() {
   const toast = useToast();
-  const [scan, setScan] = useState<CleanScan | null>(null);
+  const {
+    data: scan,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useCachedQuery<CleanScan>("clean-scan", api.scanClean, { ttl: 30_000 });
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState<OperationResult | null>(null);
-  const [error, setError] = useState("");
+  const initialized = useRef(false);
 
-  const runScan = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await api.scanClean();
-      setScan(data);
-      setSelected(
-        new Set(
-          data.items
-            .filter((item) => item.available && item.size > 0 && item.risk === "safe")
-            .map((item) => item.id),
-        ),
-      );
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Default-select safe items once; later background refreshes keep the user's choices.
   useEffect(() => {
-    runScan();
-  }, []);
+    if (!scan) return;
+    const available = scan.items.filter((item) => item.available && item.size > 0);
+    if (!initialized.current) {
+      initialized.current = true;
+      setSelected(
+        new Set(available.filter((item) => item.risk === "safe").map((item) => item.id)),
+      );
+      return;
+    }
+    setSelected((current) => {
+      const ids = new Set(available.map((item) => item.id));
+      return new Set([...current].filter((id) => ids.has(id)));
+    });
+  }, [scan]);
+
+  const runScan = () => refresh({ force: true });
 
   const groups = useMemo(() => {
     const map = new Map<string, CleanItem[]>();
@@ -114,7 +115,11 @@ export function Clean() {
           <p>扫描缓存、日志与临时文件，删除前逐项确认</p>
         </div>
         <div className="head-actions">
-          <Button icon={<RefreshCw size={16} />} onClick={runScan} loading={loading}>
+          <Button
+            icon={<RefreshCw size={16} />}
+            onClick={runScan}
+            loading={loading || refreshing}
+          >
             重新扫描
           </Button>
           <Button

@@ -117,7 +117,7 @@ export function Monitor() {
               {snapshot.loadAvg[2].toFixed(2)}
             </em>
           </div>
-          <Sparkline data={cpuHistory} color="#c6f36b" height={54} />
+          <Sparkline data={cpuHistory} color="var(--accent)" height={54} />
           <div className="core-grid">
             {snapshot.cpuCoreUsage.map((usage, index) => (
               <div className="core" key={index}>
@@ -149,7 +149,7 @@ export function Monitor() {
               {formatBytes(snapshot.memoryUsed)} / {formatBytes(snapshot.memoryTotal)}
             </em>
           </div>
-          <Sparkline data={memHistory} color="#7cc7f5" height={54} />
+          <Sparkline data={memHistory} color="var(--blue)" height={54} />
           <div className="kv-list">
             <div>
               <span>已使用</span>
@@ -184,13 +184,13 @@ export function Monitor() {
               <span className="net-label down">
                 <ArrowDown size={13} /> 下行 {formatSpeed(snapshot.network.receivedPerSec)}
               </span>
-              <Sparkline data={downHistory} color="#8fe3c0" height={34} />
+              <Sparkline data={downHistory} color="var(--teal)" height={34} />
             </div>
             <div>
               <span className="net-label up">
                 <ArrowUp size={13} /> 上行 {formatSpeed(snapshot.network.transmittedPerSec)}
               </span>
-              <Sparkline data={upHistory} color="#f2b880" height={34} />
+              <Sparkline data={upHistory} color="var(--amber)" height={34} />
             </div>
           </div>
           <div className="net-scale">

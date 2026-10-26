@@ -158,6 +158,8 @@ pub struct AnalyzeReport {
     pub file_count: u64,
     pub free_space: u64,
     pub entries: Vec<AnalyzeEntry>,
+    /// Every directory below `path`, flattened and sorted by size.
+    pub subdirs: Vec<AnalyzeEntry>,
     pub large_files: Vec<AnalyzeFile>,
     pub errors: usize,
 }

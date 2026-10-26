@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FolderX, FolderSearch, RefreshCw, Trash2 } from "lucide-react";
 import { api } from "../api";
+import { useCachedQuery } from "../cache";
 import { formatBytes, relativeTime } from "../format";
 import type { OperationResult, ProjectArtifact } from "../types";
 import {
@@ -14,37 +15,50 @@ import {
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
 
+const EMPTY_ARTIFACTS: ProjectArtifact[] = [];
+const EMPTY_ROOTS: string[] = [];
+
 export function Projects() {
   const toast = useToast();
-  const [roots, setRoots] = useState<string[]>([]);
-  const [artifacts, setArtifacts] = useState<ProjectArtifact[]>([]);
+  const {
+    data,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useCachedQuery(
+    "projects",
+    async () => {
+      const [items, currentRoots] = await Promise.all([api.scanProjects(), api.purgeRoots()]);
+      return { items, roots: currentRoots };
+    },
+    { ttl: 60_000 },
+  );
+  const artifacts = data?.items ?? EMPTY_ARTIFACTS;
+  const roots = data?.roots ?? EMPTY_ROOTS;
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
   const [scanned, setScanned] = useState(false);
   const [running, setRunning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState<OperationResult | null>(null);
-  const [error, setError] = useState("");
+  const initialized = useRef(false);
 
-  const scan = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const [items, currentRoots] = await Promise.all([api.scanProjects(), api.purgeRoots()]);
-      setArtifacts(items);
-      setRoots(currentRoots);
-      setSelected(new Set(items.filter((item) => !item.recent).map((item) => item.path)));
-      setScanned(true);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Default-select stable artifacts once; keep manual choices on refresh.
   useEffect(() => {
-    scan();
-  }, []);
+    if (!data) return;
+    setScanned(true);
+    if (!initialized.current) {
+      initialized.current = true;
+      setSelected(new Set(data.items.filter((item) => !item.recent).map((item) => item.path)));
+      return;
+    }
+    setSelected((current) => {
+      const paths = new Set(data.items.map((item) => item.path));
+      return new Set([...current].filter((path) => paths.has(path)));
+    });
+  }, [data]);
+
+  const scan = () => refresh({ force: true });
 
   const grouped = useMemo(() => {
     const map = new Map<string, ProjectArtifact[]>();
@@ -83,7 +97,7 @@ export function Projects() {
           <p>找出 node_modules、target、dist 等可重新生成的构建产物</p>
         </div>
         <div className="head-actions">
-          <Button icon={<RefreshCw size={16} />} onClick={scan} loading={loading}>
+          <Button icon={<RefreshCw size={16} />} onClick={scan} loading={loading || refreshing}>
             重新扫描
           </Button>
           <Button

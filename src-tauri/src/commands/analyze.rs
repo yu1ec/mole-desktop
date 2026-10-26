@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 
 use crate::models::{AnalyzeEntry, AnalyzeFile, AnalyzeReport};
-use crate::util::{dir_stats, expand_tilde, free_space};
+use crate::util::{dir_stats, dir_usage, expand_tilde, free_space};
 
 #[tauri::command(async)]
 pub fn analyze_dir(path: String) -> Result<AnalyzeReport, String> {
@@ -40,26 +40,58 @@ pub fn analyze_dir(path: String) -> Result<AnalyzeReport, String> {
         Err(err) => return Err(format!("无法读取 {}：{err}", root.display())),
     }
 
-    let mut entries: Vec<AnalyzeEntry> = children
+    let mut results: Vec<(AnalyzeEntry, Vec<AnalyzeEntry>)> = children
         .par_iter()
         .map(|path| {
+            let name = path
+                .file_name()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_default();
             let is_dir = path.is_dir();
-            let (size, file_count) = dir_stats(path);
-            AnalyzeEntry {
-                name: path
-                    .file_name()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_default(),
-                path: path.to_string_lossy().to_string(),
-                size,
-                is_dir,
-                file_count,
-            }
+            let mut nested = Vec::new();
+            let (size, file_count) = if is_dir {
+                // One walk gives both the directory total and every nested one.
+                let (size, file_count, dirs) = dir_usage(path);
+                nested = dirs
+                    .into_iter()
+                    .filter(|(dir, _, _)| dir != &root)
+                    .filter(|(_, size, _)| *size > 0)
+                    .map(|(dir, size, files)| AnalyzeEntry {
+                        name: dir
+                            .strip_prefix(&root)
+                            .unwrap_or(&dir)
+                            .to_string_lossy()
+                            .to_string(),
+                        path: dir.to_string_lossy().to_string(),
+                        size,
+                        is_dir: true,
+                        file_count: files,
+                    })
+                    .collect();
+                (size, file_count)
+            } else {
+                dir_stats(path)
+            };
+            (
+                AnalyzeEntry {
+                    name,
+                    path: path.to_string_lossy().to_string(),
+                    size,
+                    is_dir,
+                    file_count,
+                },
+                nested,
+            )
         })
         .collect();
 
+    let mut entries: Vec<AnalyzeEntry> = results.iter().map(|(entry, _)| entry.clone()).collect();
     entries.retain(|entry| entry.size > 0);
     entries.sort_by(|a, b| b.size.cmp(&a.size));
+
+    let mut subdirs: Vec<AnalyzeEntry> = results.drain(..).flat_map(|(_, nested)| nested).collect();
+    subdirs.sort_by(|a, b| b.size.cmp(&a.size));
+    subdirs.truncate(200);
 
     let total_size: u64 = entries.iter().map(|entry| entry.size).sum();
     let file_count: u64 = entries.iter().map(|entry| entry.file_count).sum();
@@ -94,6 +126,7 @@ pub fn analyze_dir(path: String) -> Result<AnalyzeReport, String> {
         file_count,
         free_space: free_space(&root),
         entries,
+        subdirs,
         large_files,
         errors: errors.load(Ordering::Relaxed),
     })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
   ChevronRight,
@@ -9,6 +9,7 @@ import {
   Search,
 } from "lucide-react";
 import { api } from "../api";
+import { fetchCached, readCache } from "../cache";
 import { formatBytes } from "../format";
 import type { AnalyzeReport } from "../types";
 import { Button, Card, EmptyState, Spinner, useToast } from "../components/ui";
@@ -30,26 +31,49 @@ function breadcrumbs(path: string): { label: string; value: string }[] {
   return out;
 }
 
+// Remember the last analyzed directory so re-entering the page shows it instantly.
+let lastAnalyzed = "";
+
+const ANALYZE_TTL = 30_000;
+
 export function Analyze() {
   const toast = useToast();
   const [shortcuts, setShortcuts] = useState<[string, string][]>([]);
-  const [path, setPath] = useState("");
-  const [report, setReport] = useState<AnalyzeReport | null>(null);
+  const [input, setInput] = useState(lastAnalyzed);
+  const [report, setReport] = useState<AnalyzeReport | null>(() =>
+    lastAnalyzed ? readCache<AnalyzeReport>(`analyze:${lastAnalyzed}`)?.data ?? null : null,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [scope, setScope] = useState<"level" | "all">("all");
+  const requestRef = useRef(0);
 
-  const analyze = async (target: string) => {
-    if (!target.trim()) return;
-    setLoading(true);
-    setError("");
-    try {
-      const data = await api.analyze(target.trim());
-      setReport(data);
-      setPath(data.path);
-    } catch (err) {
-      setError(String(err));
-    } finally {
+  const analyze = async (target: string, force = false) => {
+    const value = target.trim();
+    if (!value) return;
+    // Any new target wins over an older request that is still running.
+    const request = ++requestRef.current;
+    const key = `analyze:${value}`;
+    const cached = readCache<AnalyzeReport>(key);
+    if (cached) {
+      setReport(cached.data);
+      setError("");
       setLoading(false);
+      lastAnalyzed = value;
+      if (!force && Date.now() - cached.updatedAt < ANALYZE_TTL) return;
+    }
+    if (!cached) setLoading(true);
+    try {
+      const data = await fetchCached(key, () => api.analyze(value));
+      if (request !== requestRef.current) return;
+      setReport(data);
+      setInput(data.path);
+      setError("");
+      lastAnalyzed = value;
+    } catch (err) {
+      if (request === requestRef.current) setError(String(err));
+    } finally {
+      if (request === requestRef.current) setLoading(false);
     }
   };
 
@@ -58,20 +82,22 @@ export function Analyze() {
       .analyzeShortcuts()
       .then((items) => {
         setShortcuts(items);
-        if (items.length > 0) analyze(items[0][1]);
+        const initial = lastAnalyzed || items[0]?.[1];
+        if (initial) void analyze(initial);
       })
       .catch((err) => setError(String(err)));
   }, []);
 
   const crumbs = report ? breadcrumbs(report.path) : [];
   const total = report?.totalSize || 0;
+  const listed = report ? (scope === "all" ? report.subdirs : report.entries) : [];
 
   return (
     <div className="page">
       <header className="page-head">
         <div>
           <h1>磁盘分析</h1>
-          <p>逐层查看目录占用，点击方块或列表即可下钻</p>
+          <p>查看每个子目录的占用，点击方块或列表即可下钻</p>
         </div>
         <div className="head-actions">
           <Button
@@ -85,7 +111,7 @@ export function Analyze() {
             variant="primary"
             icon={<RefreshCw size={16} />}
             loading={loading}
-            onClick={() => analyze(path)}
+            onClick={() => analyze(input, true)}
           >
             重新扫描
           </Button>
@@ -98,13 +124,13 @@ export function Analyze() {
         <div className="path-input">
           <Search size={15} />
           <input
-            value={path}
-            onChange={(event) => setPath(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && analyze(path)}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => event.key === "Enter" && analyze(input)}
             placeholder="输入要分析的目录，例如 ~/Downloads"
           />
         </div>
-        <Button variant="primary" onClick={() => analyze(path)} loading={loading}>
+        <Button variant="primary" onClick={() => analyze(input)} loading={loading}>
           分析
         </Button>
       </Card>
@@ -177,11 +203,24 @@ export function Analyze() {
 
               <Card className="size-list">
                 <div className="size-list-head">
-                  <strong>占用排行</strong>
-                  <span>{report.entries.length} 项</span>
+                  <div className="size-switch">
+                    <button
+                      className={scope === "level" ? "is-active" : ""}
+                      onClick={() => setScope("level")}
+                    >
+                      本层
+                    </button>
+                    <button
+                      className={scope === "all" ? "is-active" : ""}
+                      onClick={() => setScope("all")}
+                    >
+                      全部子目录
+                    </button>
+                  </div>
+                  <span>{listed.length} 项</span>
                 </div>
                 <div className="size-list-body">
-                  {report.entries.slice(0, 40).map((entry) => (
+                  {listed.slice(0, 60).map((entry) => (
                     <button
                       key={entry.path}
                       className="size-row"

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -76,6 +77,54 @@ pub fn dir_stats(path: &Path) -> (u64, u64) {
         }
     }
     (size, files)
+}
+
+/// Single-pass walk that aggregates sizes for every directory below `path`.
+///
+/// Returns the totals for `path` itself plus `(path, size, files)` for each
+/// directory it contains. Symlinks are never followed, matching [`dir_stats`].
+pub fn dir_usage(path: &Path) -> (u64, u64, Vec<(PathBuf, u64, u64)>) {
+    let Ok(meta) = fs::symlink_metadata(path) else {
+        return (0, 0, Vec::new());
+    };
+    if !meta.is_dir() {
+        return (meta.len(), 1, Vec::new());
+    }
+
+    // Children are visited before their parent, so a directory's size is
+    // complete by the time its own entry is yielded.
+    let mut pending: HashMap<PathBuf, (u64, u64)> = HashMap::new();
+    let mut dirs = Vec::new();
+    for entry in WalkDir::new(path)
+        .follow_links(false)
+        .contents_first(true)
+        .into_iter()
+        .filter_map(Result::ok)
+    {
+        if entry.depth() == 0 {
+            continue;
+        }
+        let entry_path = entry.path();
+        let Some(parent) = entry_path.parent() else {
+            continue;
+        };
+        if entry.file_type().is_file() {
+            if let Ok(meta) = entry.metadata() {
+                let slot = pending.entry(parent.to_path_buf()).or_insert((0, 0));
+                slot.0 = slot.0.saturating_add(meta.len());
+                slot.1 += 1;
+            }
+        } else if entry.file_type().is_dir() {
+            let (size, files) = pending.remove(entry_path).unwrap_or((0, 0));
+            dirs.push((entry_path.to_path_buf(), size, files));
+            let slot = pending.entry(parent.to_path_buf()).or_insert((0, 0));
+            slot.0 = slot.0.saturating_add(size);
+            slot.1 += files;
+        }
+    }
+
+    let (total, files) = pending.remove(path).unwrap_or((0, 0));
+    (total, files, dirs)
 }
 
 /// Removes a file or directory tree without following symlinks.

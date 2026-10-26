@@ -7,11 +7,15 @@ import {
   FolderOpen,
   FolderSearch,
   Info,
+  Monitor,
+  Moon,
+  Palette,
   RefreshCw,
   RotateCcw,
   Save,
   ShieldAlert,
   ShieldCheck,
+  Sun,
   Terminal,
 } from "lucide-react";
 import { api } from "../api";
@@ -19,6 +23,7 @@ import type {
   AppInfo,
   DiskPermissionStatus,
   Settings,
+  ThemeMode,
   UpdateCheckResult,
   UpdateDownloadProgress,
 } from "../types";
@@ -32,12 +37,20 @@ import {
   useToast,
 } from "../components/ui";
 import { PermissionRestartModal, usePermissionRestart } from "../components/permissionRestart";
+import { useTheme } from "../theme";
 import { formatBytes, formatSpeed } from "../format";
 
 const RELEASES_URL = "https://github.com/yu1ec/mole-desktop/releases/latest";
 
+const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
+  { value: "system", label: "跟随系统", icon: Monitor },
+  { value: "light", label: "亮色", icon: Sun },
+  { value: "dark", label: "暗色", icon: Moon },
+];
+
 export function SettingsPage() {
   const toast = useToast();
+  const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [rootsText, setRootsText] = useState("");
@@ -228,6 +241,34 @@ export function SettingsPage() {
           保存设置
         </Button>
       </header>
+
+      <section>
+        <SectionTitle title="外观" hint="切换后立即生效；跟随系统时会随 macOS 外观自动切换" />
+        <Card className="settings-card">
+          <div className="setting-row theme-setting-row">
+            <span className="setting-icon">
+              <Palette size={18} />
+            </span>
+            <div className="setting-body">
+              <label>主题</label>
+              <p className="small muted">选择亮色、暗色，或跟随系统外观自动切换。</p>
+            </div>
+            <div className="theme-toggle" role="group" aria-label="主题">
+              {THEME_OPTIONS.map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  className={`theme-option ${themeMode === value ? "is-active" : ""}`}
+                  aria-pressed={themeMode === value}
+                  onClick={() => setThemeMode(value)}
+                >
+                  <Icon size={14} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </section>
 
       <section>
         <SectionTitle title="项目清理" hint="只扫描这些目录下的构建产物，每行一个路径" />

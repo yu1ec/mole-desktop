@@ -122,6 +122,8 @@ export interface AnalyzeReport {
   fileCount: number;
   freeSpace: number;
   entries: AnalyzeEntry[];
+  /** 当前目录下所有层级子目录，按占用从大到小排列 */
+  subdirs: AnalyzeEntry[];
   largeFiles: AnalyzeFile[];
   errors: number;
 }
@@ -176,6 +178,8 @@ export interface Settings {
   confirmBeforeDelete: boolean;
   accelerateDownload: boolean;
 }
+
+export type ThemeMode = "system" | "light" | "dark";
 
 export interface UpdateCheckResult {
   currentVersion: string;
