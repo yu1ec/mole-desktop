@@ -1,4 +1,5 @@
-//! 应用更新：检查 GitHub Releases、经国内镜像下载安装包并启动安装程序。
+//! 应用更新：检查 GitHub Releases、经国内镜像下载安装包；macOS 上直接替换
+//! `.app` 后自动重启，其他平台回退为启动官方安装程序。
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -25,6 +26,7 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 const CHECK_TIMEOUT: Duration = Duration::from_secs(25);
 const PROGRESS_EVENT: &str = "update-download-progress";
+const INSTALLING_EVENT: &str = "update-installing";
 
 fn current_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
@@ -76,6 +78,13 @@ struct UpdateDownloadProgress {
     downloaded: u64,
     total: Option<u64>,
     bytes_per_sec: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInstallResult {
+    /// `restarting`：已原地替换并重启；`installer`：无法自动安装，已打开安装包。
+    pub mode: String,
 }
 
 fn is_update_available(current: &str, latest: &str) -> anyhow::Result<bool> {
@@ -279,7 +288,34 @@ fn launch_installer(path: &Path) -> anyhow::Result<()> {
     }
 }
 
-async fn install_update(app: &AppHandle, accelerate: bool) -> anyhow::Result<()> {
+/// 下载完成后安装：macOS 直接替换当前 `.app` 并重启，其他平台交给安装程序。
+fn install_downloaded(app: &AppHandle, path: &Path) -> anyhow::Result<UpdateInstallResult> {
+    #[cfg(target_os = "macos")]
+    {
+        match macos_install::replace_and_restart(app, path) {
+            Ok(()) => unreachable!("replace_and_restart always restarts"),
+            Err(err) => {
+                // 自动安装失败时保留原有行为：打开 DMG 让用户手动拖拽。
+                eprintln!("in-place update failed, falling back to installer: {err:#}");
+                launch_installer(path)?;
+                Ok(UpdateInstallResult {
+                    mode: "installer".into(),
+                })
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        launch_installer(path)?;
+        Ok(UpdateInstallResult {
+            mode: "installer".into(),
+        })
+    }
+}
+
+async fn install_update(app: &AppHandle, accelerate: bool) -> anyhow::Result<UpdateInstallResult> {
     let check = check_update(accelerate).await?;
     if !check.update_available {
         bail!("already up to date (v{})", check.current_version);
@@ -308,7 +344,365 @@ async fn install_update(app: &AppHandle, accelerate: bool) -> anyhow::Result<()>
     )
     .await?;
 
-    launch_installer(&path)
+    install_downloaded(app, &path)
+}
+
+#[cfg(target_os = "macos")]
+mod macos_install {
+    use std::fs;
+    use std::process::Command;
+
+    use anyhow::{bail, Context as _};
+    use tauri::{AppHandle, Emitter as _};
+
+    use super::{Path, PathBuf, INSTALLING_EVENT};
+
+    struct MountedDmg {
+        mount_point: PathBuf,
+    }
+
+    impl Drop for MountedDmg {
+        fn drop(&mut self) {
+            let detached = Command::new("hdiutil")
+                .args(["detach", "-quiet"])
+                .arg(&self.mount_point)
+                .status()
+                .map(|status| status.success())
+                .unwrap_or(false);
+            if !detached {
+                let _ = Command::new("hdiutil")
+                    .args(["detach", "-quiet", "-force"])
+                    .arg(&self.mount_point)
+                    .status();
+            }
+            let _ = fs::remove_dir_all(&self.mount_point);
+        }
+    }
+
+    /// 挂载 DMG，替换当前 `.app`，然后重启进程。
+    /// 成功时进程会退出，不会返回。
+    pub fn replace_and_restart(app: &AppHandle, dmg: &Path) -> anyhow::Result<()> {
+        let current = current_bundle().context("未在 .app 内运行，无法自动安装")?;
+        let destination = install_destination(&current);
+
+        let (mounted, source) = mount_dmg(dmg)?;
+        verify_same_signer(&source, &current)?;
+        replace_bundle(&source, &destination).with_context(|| {
+            format!(
+                "替换应用失败（{} → {}）",
+                source.display(),
+                destination.display()
+            )
+        })?;
+        drop(mounted);
+        let _ = fs::remove_file(dmg);
+        // 刷新 LaunchServices 缓存，避免 Finder 里仍显示旧版本元数据。
+        let _ = Command::new("touch").arg(&destination).status();
+
+        // 给前端一点时间显示“正在安装”，随后自己重启进入新版本。
+        let _ = app.emit(INSTALLING_EVENT, ());
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        if current == destination {
+            app.restart();
+        }
+        // 原本从 DMG 或 AppTranslocation 运行：启动新位置的应用。
+        let _ = Command::new("open").arg("-n").arg(&destination).status();
+        std::process::exit(0);
+    }
+
+    /// 校验新包的签名完整、且签名身份与当前应用一致，避免镜像被替换后
+    /// 静默安装其他来源的应用。当前应用未签名（开发构建）时不做身份限制。
+    fn verify_same_signer(source: &Path, current: &Path) -> anyhow::Result<()> {
+        let output = Command::new("codesign")
+            .args(["--verify", "--deep", "--strict"])
+            .arg(source)
+            .output()
+            .context("运行 codesign 校验失败")?;
+        if !output.status.success() {
+            bail!(
+                "新版本安装包签名校验失败：{}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+
+        let Some(current_requirement) = designated_requirement(current) else {
+            return Ok(());
+        };
+        let source_requirement =
+            designated_requirement(source).context("新版本安装包没有有效签名")?;
+        if source_requirement != current_requirement {
+            bail!("新版本的签名与当前应用不一致，已取消自动安装");
+        }
+        Ok(())
+    }
+
+    /// 读取稳定的 designated requirement；ad-hoc 签名含 cdhash，每次构建都会变，视为不可校验。
+    fn designated_requirement(app: &Path) -> Option<String> {
+        let output = Command::new("codesign")
+            .args(["-d", "-r-"])
+            .arg(app)
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        // codesign 把诊断信息写到 stderr。
+        let text = String::from_utf8_lossy(&output.stderr);
+        let requirement = text
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("designated =>"))?
+            .trim();
+        if requirement.contains("cdhash") {
+            return None;
+        }
+        Some(requirement.to_string())
+    }
+
+    fn current_bundle() -> Option<PathBuf> {
+        let exe = std::env::current_exe().ok()?;
+        exe.ancestors()
+            .find(|path| path.extension().map(|ext| ext == "app").unwrap_or(false))
+            .map(Path::to_path_buf)
+    }
+
+    /// App Translocation 或直接从 DMG 运行时，更新应落到 `/Applications`。
+    fn install_destination(current: &Path) -> PathBuf {
+        let text = current.to_string_lossy();
+        let relocated = text.contains("/AppTranslocation/") || text.starts_with("/Volumes/");
+        if relocated {
+            if let Some(name) = current.file_name() {
+                return PathBuf::from("/Applications").join(name);
+            }
+        }
+        current.to_path_buf()
+    }
+
+    fn mount_dmg(dmg: &Path) -> anyhow::Result<(MountedDmg, PathBuf)> {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or_default();
+        let mount_point =
+            std::env::temp_dir().join(format!("mole-update-{}-{nanos}", std::process::id()));
+        fs::create_dir_all(&mount_point).context("创建挂载点失败")?;
+
+        let output = Command::new("hdiutil")
+            .args([
+                "attach",
+                "-nobrowse",
+                "-readonly",
+                "-noautoopen",
+                "-mountpoint",
+            ])
+            .arg(&mount_point)
+            .arg(dmg)
+            .output()
+            .context("运行 hdiutil 挂载安装包失败")?;
+        if !output.status.success() {
+            let _ = fs::remove_dir_all(&mount_point);
+            bail!(
+                "挂载安装包失败：{}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+
+        let mounted = MountedDmg {
+            mount_point: mount_point.clone(),
+        };
+        let source = find_app(&mount_point).context("安装包中未找到 .app")?;
+        Ok((mounted, source))
+    }
+
+    fn find_app(root: &Path) -> Option<PathBuf> {
+        fn scan(dir: &Path, depth: usize, found: &mut Vec<PathBuf>) {
+            let Ok(entries) = fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries.flatten() {
+                // 不跟随符号链接：DMG 根目录的 Applications 链接指向本机
+                // 已安装应用，跟进去会把旧版本当成更新包。
+                let Ok(file_type) = entry.file_type() else {
+                    continue;
+                };
+                if file_type.is_symlink() || !file_type.is_dir() {
+                    continue;
+                }
+                let path = entry.path();
+                if path.extension().map(|ext| ext == "app").unwrap_or(false) {
+                    found.push(path);
+                } else if depth > 0 {
+                    scan(&path, depth - 1, found);
+                }
+            }
+        }
+
+        let mut apps = Vec::new();
+        scan(root, 1, &mut apps);
+        apps.sort();
+        apps.iter()
+            .find(|path| {
+                path.file_name()
+                    .map(|name| name.to_string_lossy().contains("Mole"))
+                    .unwrap_or(false)
+            })
+            .cloned()
+            .or_else(|| apps.into_iter().next())
+    }
+
+    /// 先在目标目录里复制出完整副本，再用 rename 原子替换，避免半成品。
+    fn replace_bundle(source: &Path, destination: &Path) -> anyhow::Result<()> {
+        let parent = destination.parent().context("应用路径没有父目录")?;
+        let name = destination
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("应用路径没有名称")?;
+        let staging = parent.join(format!(".{name}.staging"));
+        let backup = parent.join(format!(".{name}.old"));
+
+        let _ = fs::remove_dir_all(&staging);
+        let _ = fs::remove_dir_all(&backup);
+
+        if !dir_writable(parent) {
+            return elevated_replace(source, destination, &staging, &backup);
+        }
+
+        copy_bundle(source, &staging).inspect_err(|_| {
+            let _ = fs::remove_dir_all(&staging);
+        })?;
+        if destination.exists() {
+            fs::rename(destination, &backup).context("备份旧版本失败")?;
+        }
+        if let Err(err) = fs::rename(&staging, destination) {
+            if backup.exists() {
+                let _ = fs::rename(&backup, destination);
+            }
+            let _ = fs::remove_dir_all(&staging);
+            return Err(err).context("替换应用失败");
+        }
+        let _ = fs::remove_dir_all(&backup);
+        Ok(())
+    }
+
+    fn dir_writable(dir: &Path) -> bool {
+        let probe = dir.join(format!(".mole-write-test-{}", std::process::id()));
+        match fs::File::create(&probe) {
+            Ok(_) => {
+                let _ = fs::remove_file(&probe);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
+    fn copy_bundle(source: &Path, destination: &Path) -> anyhow::Result<()> {
+        let output = Command::new("ditto")
+            .arg(source)
+            .arg(destination)
+            .output()
+            .context("运行 ditto 复制应用失败")?;
+        if !output.status.success() {
+            bail!(
+                "复制新版本失败：{}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(())
+    }
+
+    /// `/Applications` 不可写时（例如以 root 安装），通过系统密码框提权。
+    fn elevated_replace(
+        source: &Path,
+        destination: &Path,
+        staging: &Path,
+        backup: &Path,
+    ) -> anyhow::Result<()> {
+        let script = format!(
+            "set -e; rm -rf {staging}; ditto {source} {staging}; rm -rf {backup}; \
+             if [ -e {destination} ]; then mv {destination} {backup}; fi; \
+             mv {staging} {destination}; rm -rf {backup}",
+            staging = shell_quote(staging),
+            source = shell_quote(source),
+            backup = shell_quote(backup),
+            destination = shell_quote(destination),
+        );
+        let apple_script = format!(
+            "do shell script {} with administrator privileges",
+            applescript_quote(&script)
+        );
+        let output = Command::new("osascript")
+            .args(["-e", &apple_script])
+            .output()
+            .context("请求管理员权限失败")?;
+        if !output.status.success() {
+            bail!(
+                "自动安装失败：{}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        Ok(())
+    }
+
+    fn shell_quote(path: &Path) -> String {
+        format!("'{}'", path.to_string_lossy().replace('\'', "'\\''"))
+    }
+
+    fn applescript_quote(text: &str) -> String {
+        format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn relocated_apps_install_into_applications() {
+            let expected = PathBuf::from("/Applications/Mole Desktop.app");
+            assert_eq!(
+                install_destination(Path::new(
+                    "/private/var/folders/x/AppTranslocation/ABC/d/Mole Desktop.app"
+                )),
+                expected
+            );
+            assert_eq!(
+                install_destination(Path::new("/Volumes/Mole Desktop/Mole Desktop.app")),
+                expected
+            );
+            assert_eq!(
+                install_destination(Path::new("/Applications/Mole Desktop.app")),
+                expected
+            );
+        }
+
+        #[test]
+        fn shell_quote_escapes_single_quotes() {
+            assert_eq!(
+                shell_quote(Path::new("/Applications/Mole Desktop.app")),
+                "'/Applications/Mole Desktop.app'"
+            );
+            assert_eq!(shell_quote(Path::new("/tmp/a'b")), "'/tmp/a'\\''b'");
+        }
+
+        #[test]
+        fn find_app_does_not_follow_applications_symlink() {
+            let root = std::env::temp_dir().join(format!(
+                "mole-find-app-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|duration| duration.as_nanos())
+                    .unwrap_or_default()
+            ));
+            let installed = root.join("installed");
+            fs::create_dir_all(installed.join("Mole Desktop.app")).unwrap();
+            let real = root.join("Mole Desktop.app");
+            fs::create_dir_all(&real).unwrap();
+            std::os::unix::fs::symlink(&installed, root.join("Applications")).unwrap();
+
+            assert_eq!(find_app(&root), Some(real));
+
+            let _ = fs::remove_dir_all(&root);
+        }
+    }
 }
 
 #[tauri::command]
@@ -319,7 +713,10 @@ pub async fn check_for_update(accelerate: Option<bool>) -> Result<UpdateCheckRes
 }
 
 #[tauri::command]
-pub async fn download_and_install_update(app: AppHandle, accelerate: bool) -> Result<(), String> {
+pub async fn download_and_install_update(
+    app: AppHandle,
+    accelerate: bool,
+) -> Result<UpdateInstallResult, String> {
     install_update(&app, accelerate)
         .await
         .map_err(|err| err.to_string())

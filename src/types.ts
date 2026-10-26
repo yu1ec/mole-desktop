@@ -196,6 +196,11 @@ export interface UpdateDownloadProgress {
   bytesPerSec: number;
 }
 
+export interface UpdateInstallResult {
+  /** `restarting`：已原地替换并重启；`installer`：无法自动安装，已打开安装包。 */
+  mode: "restarting" | "installer";
+}
+
 export interface AppInfo {
   platform: string;
   home: string;

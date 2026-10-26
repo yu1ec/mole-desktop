@@ -60,6 +60,7 @@ export function SettingsPage() {
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
+  const [installPhase, setInstallPhase] = useState<"downloading" | "installing" | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [permission, setPermission] = useState<DiskPermissionStatus | null>(null);
   const [probing, setProbing] = useState(false);
@@ -198,20 +199,34 @@ export function SettingsPage() {
     if (!settings) return;
     setInstalling(true);
     setProgress(null);
+    setInstallPhase("downloading");
     setUpdateError(null);
     let unlisten: (() => void) | undefined;
+    let unlistenInstalling: (() => void) | undefined;
     try {
       unlisten = await listen<UpdateDownloadProgress>("update-download-progress", (event) => {
         setProgress(event.payload);
       });
-      await api.downloadAndInstallUpdate(settings.accelerateDownload);
-      toast("安装包已下载，正在启动安装程序", "success");
+      unlistenInstalling = await listen("update-installing", () => {
+        setInstallPhase("installing");
+      });
+      const result = await api.downloadAndInstallUpdate(settings.accelerateDownload);
+      if (result.mode === "installer") {
+        toast(
+          info?.platform === "macos"
+            ? "自动安装未完成，已打开安装包，请拖入「应用程序」完成更新"
+            : "安装程序已启动，请按提示完成更新",
+          "info",
+        );
+      }
     } catch (err) {
       setUpdateError(String(err));
       toast("更新失败，可尝试手动下载安装包", "error");
     } finally {
       unlisten?.();
+      unlistenInstalling?.();
       setInstalling(false);
+      setInstallPhase(null);
       setProgress(null);
     }
   };
@@ -462,13 +477,17 @@ export function SettingsPage() {
                   <ProgressBar value={progressPercent} />
                   <div className="update-progress-meta">
                     <span>
-                      {progress
-                        ? `${formatBytes(progress.downloaded)}${
-                            progress.total ? ` / ${formatBytes(progress.total)}` : ""
-                          }`
-                        : "正在连接下载源…"}
+                      {installPhase === "installing"
+                        ? "正在安装并重启…"
+                        : progress
+                          ? `${formatBytes(progress.downloaded)}${
+                              progress.total ? ` / ${formatBytes(progress.total)}` : ""
+                            }`
+                          : "正在连接下载源…"}
                     </span>
-                    {progress && <span>{formatSpeed(progress.bytesPerSec)}</span>}
+                    {progress && installPhase !== "installing" && (
+                      <span>{formatSpeed(progress.bytesPerSec)}</span>
+                    )}
                   </div>
                 </div>
               )}

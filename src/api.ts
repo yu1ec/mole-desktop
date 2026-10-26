@@ -16,6 +16,7 @@ import type {
   Settings,
   SystemSnapshot,
   UpdateCheckResult,
+  UpdateInstallResult,
 } from "./types";
 
 export const api = {
@@ -54,7 +55,7 @@ export const api = {
   checkForUpdate: (accelerate: boolean) =>
     invoke<UpdateCheckResult>("check_for_update", { accelerate }),
   downloadAndInstallUpdate: (accelerate: boolean) =>
-    invoke<void>("download_and_install_update", { accelerate }),
+    invoke<UpdateInstallResult>("download_and_install_update", { accelerate }),
   reveal: (path: string) => invoke<void>("reveal_path", { path }),
   openExternal: (path: string) => invoke<void>("open_external", { path }),
   openDataDir: () => invoke<void>("open_data_dir"),
