@@ -118,6 +118,12 @@ export interface Leftover {
   recommended: boolean;
 }
 
+export interface AppRunningInfo {
+  running: boolean;
+  isSelf: boolean;
+  pids: number[];
+}
+
 export interface AppEntry {
   id: string;
   name: string;

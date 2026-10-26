@@ -31,6 +31,7 @@ pub fn run() {
             commands::clean::list_installers,
             commands::clean::delete_installers,
             commands::apps::list_apps,
+            commands::apps::app_running,
             commands::apps::app_leftovers,
             commands::apps::uninstall_app,
             commands::analyze::analyze_dir,

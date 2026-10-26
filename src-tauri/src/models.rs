@@ -153,6 +153,14 @@ pub struct Leftover {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AppRunningInfo {
+    pub running: bool,
+    pub is_self: bool,
+    pub pids: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppEntry {
     pub id: String,
     pub name: String,

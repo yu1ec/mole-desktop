@@ -11,7 +11,7 @@ import {
 import { api } from "../api";
 import { invalidateCachePrefix, useCachedQuery } from "../cache";
 import { formatBytes, relativeTime } from "../format";
-import type { AppEntry, Leftover, OperationResult } from "../types";
+import type { AppEntry, AppRunningInfo, Leftover, OperationResult } from "../types";
 import {
   Button,
   Card,
@@ -54,6 +54,8 @@ export function Uninstall() {
   const [permanent, setPermanent] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [running, setRunning] = useState(false);
+  const [runningInfo, setRunningInfo] = useState<AppRunningInfo | null>(null);
+  const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<OperationResult | null>(null);
 
   useEffect(() => {
@@ -113,12 +115,33 @@ export function Uninstall() {
     .reduce((total, item) => total + item.size, 0);
   const totalSize = apps.reduce((total, app) => total + app.size, 0);
 
+  const requestUninstall = async () => {
+    if (!active || checking) return;
+    setChecking(true);
+    try {
+      const info = await api.appRunning(active.id);
+      setRunningInfo(info.running ? info : null);
+      setConfirmOpen(true);
+    } catch (err) {
+      toast(String(err), "error");
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const closeConfirm = () => {
+    setConfirmOpen(false);
+    setRunningInfo(null);
+  };
+
   const uninstall = async () => {
     if (!active) return;
+    const quitProcess = runningInfo !== null;
     setConfirmOpen(false);
+    setRunningInfo(null);
     setRunning(true);
     try {
-      const data = await api.uninstallApp(active.id, [...checked], permanent);
+      const data = await api.uninstallApp(active.id, [...checked], permanent, quitProcess);
       setResult(data);
       toast(`${active.name} 已处理完成`, "success");
       invalidateCachePrefix("app-leftovers:");
@@ -312,8 +335,8 @@ export function Uninstall() {
                     <Button
                       variant="danger"
                       icon={<Trash2 size={16} />}
-                      loading={running}
-                      onClick={() => setConfirmOpen(true)}
+                      loading={running || checking}
+                      onClick={requestUninstall}
                     >
                       卸载 {active.name}
                     </Button>
@@ -327,21 +350,36 @@ export function Uninstall() {
 
       <Modal
         open={confirmOpen}
-        title={active ? `卸载 ${active.name}？` : ""}
-        description="应用本体与选中的相关文件会被移除。卸载后可能需要重新登录相关账号。"
+        title={
+          active
+            ? runningInfo
+              ? `${active.name} 正在运行`
+              : `卸载 ${active.name}？`
+            : ""
+        }
+        description={
+          runningInfo
+            ? "应用进程仍在运行。继续操作会先结束该进程，未保存的内容可能会丢失。"
+            : "应用本体与选中的相关文件会被移除。卸载后可能需要重新登录相关账号。"
+        }
         tone="danger"
-        onClose={() => setConfirmOpen(false)}
+        onClose={closeConfirm}
         footer={
           <>
-            <Button variant="quiet" onClick={() => setConfirmOpen(false)}>
+            <Button variant="quiet" onClick={closeConfirm}>
               取消
             </Button>
             <Button variant="danger" loading={running} onClick={uninstall}>
-              确认卸载
+              {runningInfo ? "结束进程并卸载" : "确认卸载"}
             </Button>
           </>
         }
       >
+        {runningInfo?.isSelf && (
+          <p className="muted small">
+            当前运行的就是 {active?.name}，卸载会结束它的进程。
+          </p>
+        )}
         {active && (
           <ul className="confirm-list">
             <li>

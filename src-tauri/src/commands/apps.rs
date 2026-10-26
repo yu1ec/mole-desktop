@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use tauri::State;
 
-use crate::models::{AppEntry, HistoryEntry, Leftover, OperationResult};
+use crate::models::{AppEntry, AppRunningInfo, HistoryEntry, Leftover, OperationResult};
 use crate::state::AppState;
 use crate::store::push_history;
 use crate::util::{dir_stats, home, mtime, move_to_trash, now_rfc3339, remove_path};
@@ -42,13 +42,116 @@ pub fn app_leftovers(app_id: String) -> Vec<Leftover> {
 }
 
 #[tauri::command(async)]
+pub fn app_running(app_id: String) -> AppRunningInfo {
+    #[cfg(target_os = "macos")]
+    {
+        let path = PathBuf::from(&app_id);
+        if !is_macos_app(&path) {
+            return AppRunningInfo {
+                running: false,
+                is_self: false,
+                pids: Vec::new(),
+            };
+        }
+        let pids = running_pids(&path);
+        AppRunningInfo {
+            running: !pids.is_empty(),
+            is_self: pids.contains(&std::process::id()),
+            pids,
+        }
+    }
+    #[cfg(windows)]
+    {
+        windows::running_info(&app_id)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        let _ = app_id;
+        AppRunningInfo {
+            running: false,
+            is_self: false,
+            pids: Vec::new(),
+        }
+    }
+}
+
+/// PIDs whose executable lives inside `root` (an app bundle or install directory).
+fn running_pids(root: &Path) -> Vec<u32> {
+    use sysinfo::{ProcessesToUpdate, System};
+
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let mut sys = System::new();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    let mut pids: Vec<u32> = sys
+        .processes()
+        .iter()
+        .filter_map(|(pid, process)| {
+            let exe = process.exe()?;
+            let exe = exe.canonicalize().unwrap_or_else(|_| exe.to_path_buf());
+            exe.starts_with(&root).then_some(pid.as_u32())
+        })
+        .collect();
+    pids.sort_unstable();
+    pids
+}
+
+/// Ask processes to terminate, then force-kill whatever is still alive.
+/// The current process is never signalled so the uninstall command can finish.
+/// Returns the PIDs that could not be terminated.
+fn terminate_processes(pids: &[u32]) -> Vec<u32> {
+    use sysinfo::{Pid, ProcessesToUpdate, Signal, System};
+
+    let current = std::process::id();
+    let targets: Vec<Pid> = pids
+        .iter()
+        .copied()
+        .filter(|pid| *pid != current)
+        .map(Pid::from_u32)
+        .collect();
+    if targets.is_empty() {
+        return Vec::new();
+    }
+
+    let mut sys = System::new();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    for pid in &targets {
+        if let Some(process) = sys.process(*pid) {
+            let _ = process.kill_with(Signal::Term);
+        }
+    }
+    for _ in 0..12 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        sys.refresh_processes(ProcessesToUpdate::All, true);
+        if targets.iter().all(|pid| sys.process(*pid).is_none()) {
+            return Vec::new();
+        }
+    }
+    for pid in &targets {
+        if let Some(process) = sys.process(*pid) {
+            let _ = process.kill();
+        }
+    }
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    targets
+        .iter()
+        .filter(|pid| sys.process(**pid).is_some())
+        .map(|pid| pid.as_u32())
+        .collect()
+}
+
+#[tauri::command(async)]
 pub fn uninstall_app(
     app_id: String,
     leftovers: Vec<String>,
     permanent: bool,
+    quit_process: bool,
+    _app: tauri::AppHandle,
     state: State<AppState>,
 ) -> Result<OperationResult, String> {
     let mut result = OperationResult::default();
+    #[cfg(target_os = "macos")]
+    let self_running: bool;
     let name = {
         #[cfg(target_os = "macos")]
         {
@@ -60,7 +163,15 @@ pub fn uninstall_app(
             if !is_macos_app(&path) {
                 return Err("只能卸载 /Applications 或 ~/Applications 中的应用".into());
             }
-            macos::quit(&path);
+            let pids = running_pids(&path);
+            self_running = pids.contains(&std::process::id());
+            if quit_process {
+                if !terminate_processes(&pids).is_empty() {
+                    return Err("无法结束该应用的进程，请手动退出后重试".into());
+                }
+            } else if !pids.is_empty() && !self_running {
+                macos::quit(&path);
+            }
             let paths = if permanent {
                 let (freed, files, errors) = remove_path(&path);
                 result.freed += freed;
@@ -83,7 +194,7 @@ pub fn uninstall_app(
         }
         #[cfg(windows)]
         {
-            windows::uninstall(&app_id, &mut result)?
+            windows::uninstall(&app_id, quit_process, &mut result)?
         }
         #[cfg(not(any(target_os = "macos", windows)))]
         {
@@ -141,6 +252,18 @@ pub fn uninstall_app(
             detail: result.removed.join("、"),
         },
     );
+
+    // When uninstalling the running app itself, the bundle is already gone at this
+    // point; exit once the UI has had time to receive the result.
+    #[cfg(target_os = "macos")]
+    if self_running && quit_process && result.removed.iter().any(|path| path == &app_id) {
+        let handle = _app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(1600));
+            handle.exit(0);
+        });
+    }
+
     Ok(result)
 }
 
@@ -594,13 +717,40 @@ mod windows {
         out
     }
 
-    pub fn uninstall(app_id: &str, result: &mut OperationResult) -> Result<String, String> {
+    pub fn running_info(app_id: &str) -> AppRunningInfo {
+        let idle = AppRunningInfo {
+            running: false,
+            is_self: false,
+            pids: Vec::new(),
+        };
+        let Some(app) = raw_apps().into_iter().find(|app| app.id == app_id) else {
+            return idle;
+        };
+        if app.location.is_empty() || !Path::new(&app.location).exists() {
+            return idle;
+        }
+        let pids = running_pids(Path::new(&app.location));
+        AppRunningInfo {
+            running: !pids.is_empty(),
+            is_self: pids.contains(&std::process::id()),
+            pids,
+        }
+    }
+
+    pub fn uninstall(
+        app_id: &str,
+        quit_process: bool,
+        result: &mut OperationResult,
+    ) -> Result<String, String> {
         let Some(app) = raw_apps().into_iter().find(|app| app.id == app_id) else {
             return Err("找不到该应用的卸载信息".into());
         };
         let Some(command) = app.uninstaller.clone() else {
             return Err("该应用没有提供卸载程序，请使用系统设置卸载".into());
         };
+        if quit_process && !app.location.is_empty() {
+            terminate_processes(&running_pids(Path::new(&app.location)));
+        }
         std::process::Command::new("cmd")
             .args(["/C", &command])
             .spawn()

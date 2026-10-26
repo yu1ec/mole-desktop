@@ -3,6 +3,7 @@ import type {
   AnalyzeReport,
   AppEntry,
   AppInfo,
+  AppRunningInfo,
   CleanDetail,
   CleanScan,
   DiskPermissionStatus,
@@ -29,9 +30,10 @@ export const api = {
   runClean: (items: string[]) => invoke<OperationResult>("run_clean", { items }),
 
   listApps: () => invoke<AppEntry[]>("list_apps"),
+  appRunning: (appId: string) => invoke<AppRunningInfo>("app_running", { appId }),
   appLeftovers: (appId: string) => invoke<Leftover[]>("app_leftovers", { appId }),
-  uninstallApp: (appId: string, leftovers: string[], permanent: boolean) =>
-    invoke<OperationResult>("uninstall_app", { appId, leftovers, permanent }),
+  uninstallApp: (appId: string, leftovers: string[], permanent: boolean, quitProcess: boolean) =>
+    invoke<OperationResult>("uninstall_app", { appId, leftovers, permanent, quitProcess }),
 
   analyze: (path: string) => invoke<AnalyzeReport>("analyze_dir", { path }),
   analyzeShortcuts: () => invoke<[string, string][]>("analyze_shortcuts"),
