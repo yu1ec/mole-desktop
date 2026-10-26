@@ -14,6 +14,7 @@ import {
   useToast,
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
+import { CleanDetailModal, clearCleanDetailCache } from "../components/CleanDetailModal";
 
 const EMPTY_ARTIFACTS: ProjectArtifact[] = [];
 const EMPTY_ROOTS: string[] = [];
@@ -41,7 +42,13 @@ export function Projects() {
   const [running, setRunning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState<OperationResult | null>(null);
+  const [detailItem, setDetailItem] = useState<ProjectArtifact | null>(null);
   const initialized = useRef(false);
+
+  // A new scan means the per-directory breakdowns may be stale.
+  useEffect(() => {
+    clearCleanDetailCache();
+  }, [data]);
 
   // Default-select stable artifacts once; keep manual choices on refresh.
   useEffect(() => {
@@ -192,30 +199,39 @@ export function Projects() {
                 </div>
                 <Card className="artifact-list">
                   {items.map((item) => (
-                    <Checkbox
-                      key={item.path}
-                      checked={selected.has(item.path)}
-                      onChange={(value) =>
-                        setSelected((current) => {
-                          const next = new Set(current);
-                          if (value) next.add(item.path);
-                          else next.delete(item.path);
-                          return next;
-                        })
-                      }
-                      className="artifact-row"
-                      label={
-                        <span className="artifact-label">
-                          <span className="artifact-kind">{item.kind}</span>
-                          <span className="artifact-path" title={item.path}>
-                            {item.path}
+                    <div className="artifact-row-wrap" key={item.path}>
+                      <Checkbox
+                        checked={selected.has(item.path)}
+                        onChange={(value) =>
+                          setSelected((current) => {
+                            const next = new Set(current);
+                            if (value) next.add(item.path);
+                            else next.delete(item.path);
+                            return next;
+                          })
+                        }
+                        className="artifact-row"
+                        label={
+                          <span className="artifact-label">
+                            <span className="artifact-kind">{item.kind}</span>
+                            <span className="artifact-path" title={item.path}>
+                              {item.path}
+                            </span>
+                            {item.recent && <span className="badge badge-warn">7 天内修改</span>}
+                            <em>{formatBytes(item.size)}</em>
                           </span>
-                          {item.recent && <span className="badge badge-warn">7 天内修改</span>}
-                          <em>{formatBytes(item.size)}</em>
-                        </span>
-                      }
-                      hint={<span className="path-text">最后修改 {relativeTime(item.modified)}</span>}
-                    />
+                        }
+                        hint={<span className="path-text">最后修改 {relativeTime(item.modified)}</span>}
+                      />
+                      {item.size > 0 && (
+                        <button
+                          className="clean-detail-link"
+                          onClick={() => setDetailItem(item)}
+                        >
+                          查看明细
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </Card>
               </section>
@@ -226,7 +242,8 @@ export function Projects() {
             <Trash2 size={16} />
             <p>
               构建产物会被<strong>永久删除</strong>，不进入废纸篓。它们通常可以重新生成，但删除后首次构建会变慢。
-              最近 7 天修改过的产物默认不勾选。
+              最近 7 天修改过的产物默认不勾选。点击每项右侧的<strong>查看明细</strong>
+              可逐层查看将被删除的目录与文件。
             </p>
           </Card>
         </>
@@ -258,6 +275,20 @@ export function Projects() {
           ))}
         </ul>
       </Modal>
+
+      {detailItem && (
+        <CleanDetailModal
+          key={detailItem.path}
+          source={{
+            key: `artifact:${detailItem.path}`,
+            title: `${detailItem.kind} · ${formatBytes(detailItem.size)}`,
+            description:
+              "该构建产物会被整体永久删除，以下目录与文件都在删除范围内。",
+            load: (path) => api.projectArtifactDetail(detailItem.path, path),
+          }}
+          onClose={() => setDetailItem(null)}
+        />
+      )}
 
       <Modal
         open={!!result}

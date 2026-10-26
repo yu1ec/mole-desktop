@@ -2,8 +2,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use rayon::prelude::*;
 use walkdir::WalkDir;
 
 pub fn home() -> PathBuf {
@@ -77,6 +79,65 @@ pub fn dir_stats(path: &Path) -> (u64, u64) {
         }
     }
     (size, files)
+}
+
+/// Aggregates the direct children of `path` in one pass.
+///
+/// Returns `(total size, total files, children, unreadable entries)` where each
+/// child is `(path, is_dir, size, files)`. Directories are measured with
+/// [`dir_stats`], and the whole level is walked in parallel so browsing a large
+/// cache folder costs the same single traversal as the initial scan while using
+/// every core.
+pub fn dir_children(path: &Path) -> (u64, u64, Vec<(PathBuf, bool, u64, u64)>, usize) {
+    let Ok(meta) = fs::symlink_metadata(path) else {
+        return (0, 0, Vec::new(), 1);
+    };
+    if !meta.is_dir() {
+        return (meta.len(), 1, Vec::new(), 0);
+    }
+    let Ok(iter) = fs::read_dir(path) else {
+        return (0, 0, Vec::new(), 1);
+    };
+
+    let mut errors = 0usize;
+    let entries: Vec<fs::DirEntry> = iter
+        .filter_map(|entry| match entry {
+            Ok(entry) => Some(entry),
+            Err(_) => {
+                errors += 1;
+                None
+            }
+        })
+        .collect();
+    let errors = AtomicUsize::new(errors);
+
+    let mut children: Vec<(PathBuf, bool, u64, u64)> = entries
+        .into_par_iter()
+        .filter_map(|entry| {
+            let child = entry.path();
+            let Ok(file_type) = entry.file_type() else {
+                errors.fetch_add(1, Ordering::Relaxed);
+                return None;
+            };
+            if file_type.is_symlink() {
+                return None;
+            }
+            if file_type.is_dir() {
+                let (size, files) = dir_stats(&child);
+                Some((child, true, size, files))
+            } else if file_type.is_file() {
+                let size = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
+                Some((child, false, size, 1))
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    children.sort_by(|a, b| b.2.cmp(&a.2));
+    let total = children.iter().fold(0u64, |sum, child| sum.saturating_add(child.2));
+    let files = children.iter().fold(0u64, |sum, child| sum.saturating_add(child.3));
+    (total, files, children, errors.load(Ordering::Relaxed))
 }
 
 /// Single-pass walk that aggregates sizes for every directory below `path`.

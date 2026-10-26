@@ -1,11 +1,13 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use rayon::prelude::*;
 
-use crate::models::{CleanItem, OperationResult};
+use crate::models::{CleanCrumb, CleanDetail, CleanEntry, CleanItem, OperationResult};
 use crate::util::{
-    clear_dir_contents, deny_reason, dir_stats, expand_pattern, expand_tilde, home, pattern_root,
-    remove_path, unique_paths,
+    clear_dir_contents, deny_reason, dir_children, expand_pattern, expand_tilde, home,
+    pattern_root, remove_path, unique_paths,
 };
 
 pub struct Rule {
@@ -386,7 +388,7 @@ fn resolve(patterns: &[&str]) -> Vec<PathBuf> {
     unique_paths(out)
 }
 
-fn display_path(path: &Path) -> String {
+pub(crate) fn display_path(path: &Path) -> String {
     let home = home();
     let text = path.to_string_lossy().to_string();
     let home_text = home.to_string_lossy().to_string();
@@ -401,33 +403,227 @@ fn display_path(path: &Path) -> String {
     }
 }
 
+/// Direct children of every rule root, built in the same traversal that
+/// produces the rule totals.
+fn build_overview(rule: &Rule, roots: &[PathBuf]) -> CleanDetail {
+    let mut entries = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let mut total_size = 0u64;
+    let mut file_count = 0u64;
+    let mut errors = 0usize;
+    for root in roots {
+        // Some Windows patterns resolve to files directly (e.g. thumbcache_*.db).
+        if let Ok(meta) = std::fs::symlink_metadata(root) {
+            if meta.is_file() {
+                total_size = total_size.saturating_add(meta.len());
+                file_count += 1;
+                entries.push(detail_entry(root, false, meta.len(), 1));
+                continue;
+            }
+        }
+        let (size, files, children, child_errors) = dir_children(root);
+        total_size = total_size.saturating_add(size);
+        file_count = file_count.saturating_add(files);
+        errors += child_errors;
+        for (child, is_dir, child_size, child_files) in children {
+            if seen.insert(child.to_string_lossy().to_string()) {
+                entries.push(detail_entry(&child, is_dir, child_size, child_files));
+            }
+        }
+    }
+    entries.sort_by(|a, b| b.size.cmp(&a.size));
+    let truncated = entries.len() > MAX_DETAIL_ENTRIES;
+    entries.truncate(MAX_DETAIL_ENTRIES);
+    CleanDetail {
+        item_id: rule.id.to_string(),
+        label: rule.label.to_string(),
+        current: None,
+        current_display: "全部位置".into(),
+        roots: roots
+            .iter()
+            .map(|root| root.to_string_lossy().to_string())
+            .collect(),
+        roots_display: roots.iter().map(|root| display_path(root)).collect(),
+        crumbs: vec![CleanCrumb {
+            label: "全部位置".into(),
+            path: None,
+        }],
+        total_size,
+        file_count,
+        entries,
+        truncated,
+        errors,
+    }
+}
+
 pub fn scan() -> Vec<CleanItem> {
-    platform_rules()
+    let scanned: Vec<(CleanItem, CleanDetail)> = platform_rules()
         .into_par_iter()
         .map(|rule| {
             let paths = resolve(&rule.patterns);
-            let mut size = 0u64;
-            let mut file_count = 0u64;
-            for path in &paths {
-                let (s, c) = dir_stats(path);
-                size = size.saturating_add(s);
-                file_count += c;
-            }
+            let overview = build_overview(&rule, &paths);
             let display: Vec<String> = paths.iter().take(8).map(|p| display_path(p)).collect();
-            CleanItem {
-                id: rule.id.to_string(),
-                category: rule.category.to_string(),
-                label: rule.label.to_string(),
-                description: rule.description.to_string(),
-                size,
-                file_count,
-                paths: display,
-                risk: rule.risk.to_string(),
-                requires_admin: rule.requires_admin,
-                available: !paths.is_empty(),
-            }
+            (
+                CleanItem {
+                    id: rule.id.to_string(),
+                    category: rule.category.to_string(),
+                    label: rule.label.to_string(),
+                    description: rule.description.to_string(),
+                    size: overview.total_size,
+                    file_count: overview.file_count,
+                    paths: display,
+                    risk: rule.risk.to_string(),
+                    requires_admin: rule.requires_admin,
+                    available: !paths.is_empty(),
+                },
+                overview,
+            )
         })
-        .collect()
+        .collect();
+
+    if let Ok(mut cache) = overview_cache().lock() {
+        cache.clear();
+        for (_, overview) in &scanned {
+            if !overview.roots.is_empty() {
+                cache.insert(overview.item_id.clone(), overview.clone());
+            }
+        }
+    }
+
+    scanned.into_iter().map(|(item, _)| item).collect()
+}
+
+/// Upper bound for the entries sent to the UI. A directory can contain tens of
+/// thousands of files; the largest ones matter and the rest would only bloat
+/// the IPC payload and the render.
+const MAX_DETAIL_ENTRIES: usize = 500;
+
+/// Top-level breakdown captured during the free scan. Opening "查看明细" then
+/// reuses this traversal instead of walking a multi-GB cache a second time.
+static OVERVIEW_CACHE: OnceLock<Mutex<HashMap<String, CleanDetail>>> = OnceLock::new();
+
+fn overview_cache() -> &'static Mutex<HashMap<String, CleanDetail>> {
+    OVERVIEW_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Lists one directory level, sorted by size, capped at [`MAX_DETAIL_ENTRIES`].
+/// Shared by rule details and project artifact details.
+pub(crate) fn dir_detail_entries(
+    target: &Path,
+) -> (u64, u64, Vec<CleanEntry>, bool, usize) {
+    let (total_size, file_count, children, errors) = dir_children(target);
+    let mut entries: Vec<CleanEntry> = children
+        .into_iter()
+        .map(|(child, is_dir, size, files)| detail_entry(&child, is_dir, size, files))
+        .collect();
+    entries.sort_by(|a, b| b.size.cmp(&a.size));
+    let truncated = entries.len() > MAX_DETAIL_ENTRIES;
+    entries.truncate(MAX_DETAIL_ENTRIES);
+    (total_size, file_count, entries, truncated, errors)
+}
+
+fn detail_entry(path: &Path, is_dir: bool, size: u64, file_count: u64) -> CleanEntry {
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| path.to_string_lossy().to_string());
+    CleanEntry {
+        name,
+        path: path.to_string_lossy().to_string(),
+        is_dir,
+        size,
+        file_count,
+    }
+}
+
+/// One level of a cleanup rule's tree.
+///
+/// `path = None` lists the direct children of every rule root; `path = Some`
+/// drills into a directory that must stay inside one of those roots. Every call
+/// walks each directory exactly once and never follows symlinks, so the totals
+/// match what [`clean`] will remove.
+pub fn detail(id: &str, path: Option<&str>) -> Result<CleanDetail, String> {
+    let rule = platform_rules()
+        .into_iter()
+        .find(|rule| rule.id == id)
+        .ok_or_else(|| format!("未知的清理项：{id}"))?;
+    let roots = resolve(&rule.patterns);
+    if roots.is_empty() {
+        return Err("当前系统中没有找到该项目对应的目录".into());
+    }
+    let root_paths: Vec<String> = roots
+        .iter()
+        .map(|root| root.to_string_lossy().to_string())
+        .collect();
+
+    let Some(target) = path else {
+        if let Ok(cache) = overview_cache().lock() {
+            if let Some(cached) = cache.get(id) {
+                return Ok(cached.clone());
+            }
+        }
+        return Ok(build_overview(&rule, &roots));
+    };
+
+    let target = expand_tilde(target.trim());
+    if !roots.iter().any(|root| target.starts_with(root)) {
+        return Err("路径不在该清理项范围内".into());
+    }
+    if !target.exists() {
+        return Err(format!("目录不存在：{}", target.display()));
+    }
+    if !target.is_dir() {
+        return Err("请选择一个文件夹".into());
+    }
+
+    // The deepest matching root lets nested rule patterns keep short crumbs.
+    let root = roots
+        .iter()
+        .filter(|root| target.starts_with(root))
+        .max_by_key(|root| root.components().count())
+        .expect("target is inside at least one root")
+        .clone();
+
+    let (total_size, file_count, entries, truncated, errors) = dir_detail_entries(&target);
+
+    let mut crumbs = vec![
+        CleanCrumb {
+            label: "全部位置".into(),
+            path: None,
+        },
+        CleanCrumb {
+            label: display_path(&root),
+            path: Some(root.to_string_lossy().to_string()),
+        },
+    ];
+    if target != root {
+        if let Ok(relative) = target.strip_prefix(&root) {
+            let mut accumulated = root.clone();
+            for part in relative.components() {
+                accumulated.push(part.as_os_str());
+                crumbs.push(CleanCrumb {
+                    label: part.as_os_str().to_string_lossy().to_string(),
+                    path: Some(accumulated.to_string_lossy().to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(CleanDetail {
+        item_id: rule.id.to_string(),
+        label: rule.label.to_string(),
+        current_display: display_path(&target),
+        current: Some(target.to_string_lossy().to_string()),
+        roots: root_paths,
+        roots_display: roots.iter().map(|root| display_path(root)).collect(),
+        crumbs,
+        total_size,
+        file_count,
+        entries,
+        truncated,
+        errors,
+    })
 }
 
 pub fn clean(ids: &[String]) -> OperationResult {
@@ -467,6 +663,9 @@ pub fn clean(ids: &[String]) -> OperationResult {
         result.freed = result.freed.saturating_add(rule_size);
         result.files += rule_files;
         result.errors.extend(rule_errors);
+    }
+    if let Ok(mut cache) = overview_cache().lock() {
+        cache.clear();
     }
     result
 }

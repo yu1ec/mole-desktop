@@ -28,6 +28,43 @@ pub struct CleanScan {
     pub platform: String,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanEntry {
+    pub name: String,
+    pub path: String,
+    pub is_dir: bool,
+    pub size: u64,
+    pub file_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanCrumb {
+    pub label: String,
+    /// `None` 表示该项的全部根目录。
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CleanDetail {
+    pub item_id: String,
+    pub label: String,
+    pub current: Option<String>,
+    pub current_display: String,
+    /// 绝对路径，用于继续下钻。
+    pub roots: Vec<String>,
+    /// `~` 简写，用于展示。
+    pub roots_display: Vec<String>,
+    pub crumbs: Vec<CleanCrumb>,
+    pub total_size: u64,
+    pub file_count: u64,
+    pub entries: Vec<CleanEntry>,
+    pub truncated: bool,
+    pub errors: usize,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OperationResult {

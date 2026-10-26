@@ -20,6 +20,36 @@ export interface CleanScan {
   platform: string;
 }
 
+export interface CleanEntry {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  fileCount: number;
+}
+
+export interface CleanCrumb {
+  label: string;
+  /** null 表示该项的全部根目录 */
+  path: string | null;
+}
+
+export interface CleanDetail {
+  itemId: string;
+  label: string;
+  /** 当前浏览的目录；null 表示所有根目录的概览 */
+  current: string | null;
+  currentDisplay: string;
+  roots: string[];
+  rootsDisplay: string[];
+  crumbs: CleanCrumb[];
+  totalSize: number;
+  fileCount: number;
+  entries: CleanEntry[];
+  truncated: boolean;
+  errors: number;
+}
+
 export interface OperationResult {
   freed: number;
   files: number;

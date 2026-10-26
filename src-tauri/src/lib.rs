@@ -24,6 +24,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::system::system_snapshot,
             commands::clean::scan_clean,
+            commands::clean::clean_item_detail,
             commands::clean::run_clean,
             commands::clean::reveal_path,
             commands::clean::home_dir,
@@ -35,6 +36,7 @@ pub fn run() {
             commands::analyze::analyze_dir,
             commands::analyze::analyze_shortcuts,
             commands::projects::scan_projects,
+            commands::projects::project_artifact_detail,
             commands::projects::purge_projects,
             commands::projects::purge_roots,
             commands::optimize::list_optimize_tasks,

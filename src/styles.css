@@ -1154,6 +1154,47 @@ section {
   font-variant-numeric: tabular-nums;
 }
 
+.clean-row {
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.clean-row:last-child {
+  border-bottom: 0;
+}
+
+.clean-row:hover {
+  background: var(--overlay-soft);
+}
+
+.clean-row .clean-item {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.clean-row .clean-item:hover {
+  background: none;
+}
+
+.clean-detail-link {
+  flex: none;
+  margin: 14px 16px 0 0;
+  border: 0;
+  background: none;
+  padding: 2px 5px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.clean-detail-link:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
 .clean-hint {
   display: flex;
   flex-direction: column;
@@ -1193,6 +1234,162 @@ section {
   margin: 0;
   font-size: 11.5px;
   line-height: 1.6;
+}
+
+.clean-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clean-detail-crumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  min-height: 20px;
+}
+
+.clean-detail-crumbs button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 11.5px;
+  padding: 2px 4px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.clean-detail-crumbs button:hover:not(:disabled) {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.clean-detail-crumbs button:disabled {
+  color: var(--text);
+  cursor: default;
+}
+
+.clean-detail-roots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+}
+
+.clean-detail-roots > span {
+  color: var(--dim);
+}
+
+.clean-detail-roots button {
+  max-width: 100%;
+  border: 1px solid var(--border-soft);
+  background: var(--panel-2);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.clean-detail-roots button:hover {
+  color: var(--text);
+  border-color: var(--hover-border-soft);
+}
+
+.clean-detail-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.clean-detail-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.clean-detail-summary > div:last-child {
+  align-items: flex-end;
+  flex: none;
+}
+
+.clean-detail-summary span {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clean-detail-summary strong {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.clean-detail-list {
+  max-height: 420px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+}
+
+.clean-detail-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  text-align: left;
+  cursor: default;
+}
+
+.clean-detail-row.is-dir {
+  cursor: pointer;
+}
+
+.clean-detail-row:hover {
+  background: var(--panel-2);
+}
+
+.clean-detail-row em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--muted);
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.clean-detail-count {
+  font-size: 10px;
+  color: var(--dim);
+  flex: none;
+}
+
+.clean-detail-arrow {
+  color: var(--dim);
+  flex: none;
+}
+
+.clean-detail .muted.small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
 }
 
 .empty-card {
@@ -2335,6 +2532,34 @@ section {
   border-bottom: 0;
 }
 
+.artifact-row-wrap {
+  display: flex;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.artifact-row-wrap:last-child {
+  border-bottom: 0;
+}
+
+.artifact-row-wrap:hover {
+  background: var(--overlay-soft);
+}
+
+.artifact-row-wrap .artifact-row {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.artifact-row-wrap .artifact-row:hover {
+  background: none;
+}
+
+.artifact-row-wrap .clean-detail-link {
+  margin: 12px 15px 0 0;
+}
+
 .artifact-label {
   display: flex;
   align-items: center;
@@ -2732,6 +2957,7 @@ section {
   display: grid;
   place-items: center;
   padding: 24px;
+  overscroll-behavior: contain;
   animation: fadeIn 0.15s ease both;
 }
 
@@ -2745,12 +2971,37 @@ section {
   width: 540px;
   max-width: 100%;
   max-height: 82vh;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: var(--modal-bg);
   box-shadow: var(--shadow);
   animation: pop 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.modal.modal-wide {
+  width: 780px;
+  height: 82vh;
+}
+
+/* Wide dialogs keep the header/footer fixed and scroll only their list. */
+.modal-wide .modal-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-wide .clean-detail {
+  flex: 1;
+  min-height: 0;
+}
+
+.modal-wide .clean-detail-list {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
 }
 
 @keyframes pop {
@@ -2766,6 +3017,7 @@ section {
   gap: 11px;
   padding: 18px 18px 14px;
   border-bottom: 1px solid var(--border-soft);
+  flex: none;
 }
 
 .modal-head-icon {
@@ -2803,6 +3055,10 @@ section {
 
 .modal-body {
   padding: 14px 18px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .modal-footer {
@@ -2811,6 +3067,7 @@ section {
   gap: 8px;
   padding: 13px 18px 16px;
   border-top: 1px solid var(--border-soft);
+  flex: none;
 }
 
 .confirm-list {
@@ -2845,6 +3102,21 @@ section {
   font-style: normal;
   color: var(--text);
   flex: none;
+}
+
+.confirm-list .confirm-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.confirm-list .confirm-label small {
+  font-size: 10px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .result-errors {

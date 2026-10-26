@@ -3,7 +3,8 @@ use std::path::{Path, PathBuf};
 use rayon::prelude::*;
 use tauri::State;
 
-use crate::models::{HistoryEntry, OperationResult, ProjectArtifact};
+use crate::models::{CleanCrumb, CleanDetail, HistoryEntry, OperationResult, ProjectArtifact};
+use crate::rules::{dir_detail_entries, display_path};
 use crate::state::AppState;
 use crate::store::{load_settings, push_history};
 use crate::util::{dir_stats, expand_tilde, home, mtime, now_rfc3339, now_ts, remove_path, unique_paths};
@@ -142,6 +143,64 @@ pub fn scan_projects(state: State<AppState>) -> Vec<ProjectArtifact> {
         .collect();
     artifacts.sort_by(|a, b| b.size.cmp(&a.size));
     artifacts
+}
+
+#[tauri::command(async)]
+pub fn project_artifact_detail(
+    path: String,
+    sub: Option<String>,
+) -> Result<CleanDetail, String> {
+    let root = PathBuf::from(&path);
+    let Some(kind) = root.file_name().map(|name| name.to_string_lossy().to_string()) else {
+        return Err("无效的构建产物路径".into());
+    };
+    if !is_artifact(&kind) {
+        return Err("不是可清理的构建产物".into());
+    }
+    if !root.is_dir() {
+        return Err(format!("目录不存在：{}", root.display()));
+    }
+
+    let target = sub.map(PathBuf::from).unwrap_or_else(|| root.clone());
+    if !target.starts_with(&root) {
+        return Err("路径不在该构建产物范围内".into());
+    }
+    if !target.is_dir() {
+        return Err("请选择一个文件夹".into());
+    }
+
+    let (total_size, file_count, entries, truncated, errors) = dir_detail_entries(&target);
+    let mut crumbs = vec![CleanCrumb {
+        label: display_path(&root),
+        path: Some(root.to_string_lossy().to_string()),
+    }];
+    if target != root {
+        if let Ok(relative) = target.strip_prefix(&root) {
+            let mut accumulated = root.clone();
+            for part in relative.components() {
+                accumulated.push(part.as_os_str());
+                crumbs.push(CleanCrumb {
+                    label: part.as_os_str().to_string_lossy().to_string(),
+                    path: Some(accumulated.to_string_lossy().to_string()),
+                });
+            }
+        }
+    }
+
+    Ok(CleanDetail {
+        item_id: path,
+        label: kind,
+        current: Some(target.to_string_lossy().to_string()),
+        current_display: display_path(&target),
+        roots: vec![root.to_string_lossy().to_string()],
+        roots_display: vec![display_path(&root)],
+        crumbs,
+        total_size,
+        file_count,
+        entries,
+        truncated,
+        errors,
+    })
 }
 
 #[tauri::command(async)]

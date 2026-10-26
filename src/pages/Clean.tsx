@@ -21,6 +21,7 @@ import {
   useToast,
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
+import { CleanDetailModal, clearCleanDetailCache } from "../components/CleanDetailModal";
 
 export function Clean() {
   const toast = useToast();
@@ -35,7 +36,13 @@ export function Clean() {
   const [running, setRunning] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState<OperationResult | null>(null);
+  const [detailItem, setDetailItem] = useState<CleanItem | null>(null);
   const initialized = useRef(false);
+
+  // A new scan means the per-directory breakdowns may be stale.
+  useEffect(() => {
+    clearCleanDetailCache();
+  }, [scan]);
 
   // Default-select safe items once; later background refreshes keep the user's choices.
   useEffect(() => {
@@ -198,29 +205,38 @@ export function Clean() {
                   {items.map((item) => {
                     const disabled = item.size === 0;
                     return (
-                      <Checkbox
-                        key={item.id}
-                        checked={selected.has(item.id)}
-                        disabled={disabled}
-                        onChange={(checked) => toggle(item.id, checked)}
-                        className="clean-item"
-                        label={
-                          <span className="clean-label">
-                            <span>{item.label}</span>
-                            <RiskBadge risk={item.risk} admin={item.requiresAdmin} />
-                            <em>{item.size > 0 ? formatBytes(item.size) : "空"}</em>
-                          </span>
-                        }
-                        hint={
-                          <span className="clean-hint">
-                            <span>{item.description}</span>
-                            <span className="paths">
-                              {item.paths.slice(0, 2).join("  ·  ")}
-                              {item.paths.length > 2 ? `  +${item.paths.length - 2}` : ""}
+                      <div className="clean-row" key={item.id}>
+                        <Checkbox
+                          checked={selected.has(item.id)}
+                          disabled={disabled}
+                          onChange={(checked) => toggle(item.id, checked)}
+                          className="clean-item"
+                          label={
+                            <span className="clean-label">
+                              <span>{item.label}</span>
+                              <RiskBadge risk={item.risk} admin={item.requiresAdmin} />
+                              <em>{item.size > 0 ? formatBytes(item.size) : "空"}</em>
                             </span>
-                          </span>
-                        }
-                      />
+                          }
+                          hint={
+                            <span className="clean-hint">
+                              <span>{item.description}</span>
+                              <span className="paths">
+                                {item.paths.slice(0, 2).join("  ·  ")}
+                                {item.paths.length > 2 ? `  +${item.paths.length - 2}` : ""}
+                              </span>
+                            </span>
+                          }
+                        />
+                        {item.size > 0 && (
+                          <button
+                            className="clean-detail-link"
+                            onClick={() => setDetailItem(item)}
+                          >
+                            查看明细
+                          </button>
+                        )}
+                      </div>
                     );
                   })}
                 </Card>
@@ -231,7 +247,8 @@ export function Clean() {
           <Card className="clean-note">
             <AlertTriangle size={16} />
             <p>
-              清理会永久删除缓存与日志（废纸篓除外）。标记为<strong>谨慎</strong>的项目可能包含需要重新下载或恢复的数据，
+              清理会永久删除缓存与日志（废纸篓除外）。点击每项右侧的<strong>查看明细</strong>
+              可逐层查看将被删除的目录与文件。标记为<strong>谨慎</strong>的项目可能包含需要重新下载或恢复的数据，
               默认不勾选。需要管理员权限的项目会在执行时请求授权或跳过。
             </p>
           </Card>
@@ -258,12 +275,29 @@ export function Clean() {
         <ul className="confirm-list">
           {selectedItems.map((item) => (
             <li key={item.id}>
-              <span>{item.label}</span>
+              <span className="confirm-label">
+                <span>{item.label}</span>
+                <small>{item.paths.join("  ·  ")}</small>
+              </span>
               <em>{formatBytes(item.size)}</em>
             </li>
           ))}
         </ul>
       </Modal>
+
+      {detailItem && (
+        <CleanDetailModal
+          key={detailItem.id}
+          source={{
+            key: detailItem.id,
+            title: `${detailItem.label} · ${formatBytes(detailItem.size)}`,
+            description:
+              "以下目录与文件会在执行清理时被删除，清理不会触碰该范围之外的路径。",
+            load: (path) => api.cleanItemDetail(detailItem.id, path),
+          }}
+          onClose={() => setDetailItem(null)}
+        />
+      )}
 
       <Modal
         open={!!result}

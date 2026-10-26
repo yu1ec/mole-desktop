@@ -3,6 +3,7 @@ import type {
   AnalyzeReport,
   AppEntry,
   AppInfo,
+  CleanDetail,
   CleanScan,
   DiskPermissionStatus,
   HistoryEntry,
@@ -23,6 +24,8 @@ export const api = {
   snapshot: () => invoke<SystemSnapshot>("system_snapshot"),
 
   scanClean: () => invoke<CleanScan>("scan_clean"),
+  cleanItemDetail: (itemId: string, path: string | null) =>
+    invoke<CleanDetail>("clean_item_detail", { itemId, path }),
   runClean: (items: string[]) => invoke<OperationResult>("run_clean", { items }),
 
   listApps: () => invoke<AppEntry[]>("list_apps"),
@@ -39,6 +42,8 @@ export const api = {
 
   purgeRoots: () => invoke<string[]>("purge_roots"),
   scanProjects: () => invoke<ProjectArtifact[]>("scan_projects"),
+  projectArtifactDetail: (path: string, sub: string | null) =>
+    invoke<CleanDetail>("project_artifact_detail", { path, sub }),
   purgeProjects: (paths: string[]) =>
     invoke<OperationResult>("purge_projects", { paths }),
 

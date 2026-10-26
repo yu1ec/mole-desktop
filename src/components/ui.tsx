@@ -6,6 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, Check, Info, Loader2, X } from "lucide-react";
 
 /* --------------------------------- card --------------------------------- */
@@ -257,6 +258,7 @@ export function Modal({
   footer,
   onClose,
   tone = "default",
+  wide = false,
 }: {
   open: boolean;
   title: string;
@@ -265,6 +267,7 @@ export function Modal({
   footer?: ReactNode;
   onClose: () => void;
   tone?: "default" | "danger";
+  wide?: boolean;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -276,10 +279,12 @@ export function Modal({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  // Portal to body: page-level transform animations would otherwise become the
+  // containing block for position: fixed, pushing the dialog off-center.
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div
-        className={`modal ${tone === "danger" ? "modal-danger" : ""}`}
+        className={`modal ${tone === "danger" ? "modal-danger" : ""} ${wide ? "modal-wide" : ""}`}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="modal-head">
@@ -297,7 +302,8 @@ export function Modal({
         {children && <div className="modal-body">{children}</div>}
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

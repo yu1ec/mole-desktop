@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use tauri::State;
 
-use crate::models::{CleanScan, HistoryEntry, InstallerFile, OperationResult};
+use crate::models::{CleanDetail, CleanScan, HistoryEntry, InstallerFile, OperationResult};
 use crate::rules;
 use crate::state::AppState;
 use crate::store::push_history;
@@ -23,6 +23,11 @@ pub fn scan_clean() -> CleanScan {
         scanned_at: now_rfc3339(),
         platform: std::env::consts::OS.to_string(),
     }
+}
+
+#[tauri::command(async)]
+pub fn clean_item_detail(item_id: String, path: Option<String>) -> Result<CleanDetail, String> {
+    rules::detail(&item_id, path.as_deref())
 }
 
 #[tauri::command(async)]
