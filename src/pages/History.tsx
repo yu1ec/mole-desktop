@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AppWindow,
+  Beer,
+  FileCog,
   FolderX,
   History as HistoryIcon,
   Package,
@@ -19,6 +21,8 @@ const KINDS: Record<string, { label: string; icon: typeof Sparkles; tone: string
   purge: { label: "项目清理", icon: FolderX, tone: "amber" },
   installer: { label: "安装包", icon: Package, tone: "teal" },
   optimize: { label: "系统优化", icon: ShieldCheck, tone: "violet" },
+  config: { label: "配置清理", icon: FileCog, tone: "amber" },
+  brew: { label: "Homebrew", icon: Beer, tone: "teal" },
 };
 
 export function HistoryPage() {

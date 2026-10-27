@@ -6,6 +6,8 @@ import type { PageKey, SystemSnapshot } from "./types";
 import { Dashboard } from "./pages/Dashboard";
 import { Clean } from "./pages/Clean";
 import { Uninstall } from "./pages/Uninstall";
+import { Configs } from "./pages/Configs";
+import { Homebrew } from "./pages/Homebrew";
 import { Analyze } from "./pages/Analyze";
 import { Optimize } from "./pages/Optimize";
 import { Monitor } from "./pages/Monitor";
@@ -40,6 +42,8 @@ export default function App() {
           {page === "dashboard" && <Dashboard onNavigate={setPage} />}
           {page === "clean" && <Clean />}
           {page === "uninstall" && <Uninstall />}
+          {page === "configs" && <Configs />}
+          {page === "brew" && <Homebrew />}
           {page === "analyze" && <Analyze />}
           {page === "optimize" && <Optimize />}
           {page === "monitor" && <Monitor />}

@@ -956,6 +956,14 @@ section {
   background: var(--violet);
 }
 
+.activity-dot.kind-config {
+  background: var(--amber);
+}
+
+.activity-dot.kind-brew {
+  background: var(--teal);
+}
+
 .activity-row > div {
   display: flex;
   flex-direction: column;
@@ -3463,6 +3471,246 @@ section {
 :root[data-theme="light"] .is-active .app-avatar,
 :root[data-theme="light"] .chip.is-active {
   color: var(--accent);
+}
+
+/* ------------------------------ config manager --------------------------- */
+
+.config-path-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-soft);
+  border-radius: 11px;
+  overflow: hidden;
+  background: var(--overlay-soft);
+}
+
+.config-path-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.config-path-row:last-child {
+  border-bottom: 0;
+}
+
+.config-path-check {
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+}
+
+.config-path-check .check-label {
+  display: block;
+  width: 100%;
+}
+
+.config-path-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+}
+
+.config-path-label em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--dim);
+  margin-left: auto;
+}
+
+.config-kind {
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 5px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.config-path-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.config-note {
+  margin-top: 16px;
+}
+
+/* -------------------------------- homebrew ------------------------------- */
+
+.brew-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  max-width: 420px;
+}
+
+.brew-tap-add {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.brew-tap-add strong {
+  font-size: 12.5px;
+}
+
+.brew-tap-add p {
+  margin: 3px 0 0;
+}
+
+.brew-tap-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 260px;
+  max-width: 420px;
+}
+
+.brew-tap-form .input {
+  flex: 1;
+  height: 34px;
+  padding: 0 11px;
+}
+
+.brew-list {
+  padding: 4px 0;
+  margin-bottom: 16px;
+}
+
+.brew-list-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px 10px;
+  font-size: 10.5px;
+  color: var(--dim);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.brew-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.brew-row:last-child {
+  border-bottom: 0;
+}
+
+.brew-row.is-outdated {
+  background: rgba(255, 196, 107, 0.035);
+}
+
+.brew-kind {
+  flex: none;
+  width: 60px;
+  padding: 3px 0;
+  text-align: center;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--overlay-soft);
+  color: var(--muted);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.brew-kind.formula {
+  color: var(--accent);
+  border-color: rgba(198, 243, 107, 0.25);
+  background: var(--accent-soft);
+}
+
+.brew-kind.cask {
+  color: var(--warn);
+  border-color: rgba(255, 196, 107, 0.25);
+  background: rgba(255, 196, 107, 0.08);
+}
+
+.brew-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.brew-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.brew-title strong {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.brew-display {
+  font-size: 10.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brew-desc {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brew-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 10px;
+  color: var(--dim);
+}
+
+.brew-latest {
+  color: var(--warn);
+}
+
+.brew-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.brew-output {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--input-bg);
+  color: var(--muted);
+  font-size: 10.5px;
+  font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* -------------------------------- responsive ----------------------------- */

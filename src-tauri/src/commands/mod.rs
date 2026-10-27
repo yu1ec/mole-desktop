@@ -1,6 +1,8 @@
 pub mod analyze;
 pub mod apps;
+pub mod brew;
 pub mod clean;
+pub mod configs;
 pub mod misc;
 pub mod optimize;
 pub mod permissions;

@@ -22,6 +22,8 @@ export type DetailSource = {
   key: string;
   title: string;
   description: string;
+  /** 打开时直接进入的目录；留空表示先展示全部根目录 */
+  initialPath?: string | null;
   load: (path: string | null) => Promise<CleanDetail>;
 };
 
@@ -33,7 +35,7 @@ export function CleanDetailModal({
   onClose: () => void;
 }) {
   const toast = useToast();
-  const [path, setPath] = useState<string | null>(null);
+  const [path, setPath] = useState<string | null>(source.initialPath ?? null);
   const [detail, setDetail] = useState<CleanDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

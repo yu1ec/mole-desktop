@@ -40,7 +40,7 @@
 │   └── pages/              # 10 个功能页面
 ├── src-tauri/              # Rust 后端
 │   ├── src/
-│   │   ├── commands/       # system / clean / apps / analyze / projects / optimize / misc
+│   │   ├── commands/       # system / clean / apps / configs / brew / analyze / projects / optimize / misc
 │   │   ├── rules.rs        # macOS 与 Windows 清理规则
 │   │   ├── util.rs         # 路径校验、删除、废纸篓
 │   │   ├── store.rs        # 历史与设置持久化

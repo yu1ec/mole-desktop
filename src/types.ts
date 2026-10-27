@@ -198,6 +198,84 @@ export interface OptimizeResult {
   messages: string[];
 }
 
+export interface ConfigPathInfo {
+  path: string;
+  display: string;
+  kind: string;
+  isDir: boolean;
+  size: number;
+  fileCount: number;
+  modified: number;
+}
+
+export interface ConfigTool {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  /** false 表示命令已不在 PATH 中，这些目录更可能是残留。 */
+  commandAvailable: boolean;
+  totalSize: number;
+  totalFiles: number;
+  modified: number;
+  paths: ConfigPathInfo[];
+}
+
+export interface BrewPackage {
+  name: string;
+  displayName: string;
+  fullName: string;
+  /** `formula` 或 `cask` */
+  kind: string;
+  version: string;
+  latestVersion: string | null;
+  outdated: boolean;
+  pinned: boolean;
+  description: string;
+  homepage: string;
+  tap: string;
+  installedAt: number | null;
+  requested: boolean;
+  dependencies: string[];
+}
+
+export interface BrewTap {
+  name: string;
+  official: boolean;
+  path: string;
+  formulaCount: number;
+  caskCount: number;
+}
+
+export interface BrewOverview {
+  available: boolean;
+  brewPath: string | null;
+  version: string | null;
+  prefix: string | null;
+  packages: BrewPackage[];
+  taps: BrewTap[];
+  formulaCount: number;
+  caskCount: number;
+  outdatedCount: number;
+}
+
+export interface BrewTarget {
+  name: string;
+  /** `formula` 或 `cask` */
+  kind: string;
+}
+
+export interface BrewFailure {
+  name: string;
+  message: string;
+}
+
+export interface BrewResult {
+  ok: string[];
+  failed: BrewFailure[];
+  output: string;
+}
+
 export interface HistoryEntry {
   id: string;
   timestamp: string;
@@ -267,6 +345,8 @@ export type PageKey =
   | "dashboard"
   | "clean"
   | "uninstall"
+  | "configs"
+  | "brew"
   | "analyze"
   | "optimize"
   | "monitor"

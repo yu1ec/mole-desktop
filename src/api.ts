@@ -4,8 +4,12 @@ import type {
   AppEntry,
   AppInfo,
   AppRunningInfo,
+  BrewOverview,
+  BrewResult,
+  BrewTarget,
   CleanDetail,
   CleanScan,
+  ConfigTool,
   DiskPermissionStatus,
   HistoryEntry,
   InstallerFile,
@@ -34,6 +38,21 @@ export const api = {
   appLeftovers: (appId: string) => invoke<Leftover[]>("app_leftovers", { appId }),
   uninstallApp: (appId: string, leftovers: string[], permanent: boolean, quitProcess: boolean) =>
     invoke<OperationResult>("uninstall_app", { appId, leftovers, permanent, quitProcess }),
+
+  scanConfigs: () => invoke<ConfigTool[]>("scan_configs"),
+  configDetail: (toolId: string, path: string | null) =>
+    invoke<CleanDetail>("config_detail", { toolId, path }),
+  deleteConfigPaths: (paths: string[]) =>
+    invoke<OperationResult>("delete_config_paths", { paths }),
+
+  brewOverview: () => invoke<BrewOverview>("brew_overview"),
+  brewUpdate: () => invoke<BrewResult>("brew_update"),
+  brewUpgrade: (targets: BrewTarget[]) => invoke<BrewResult>("brew_upgrade", { targets }),
+  brewUpgradeAll: () => invoke<BrewResult>("brew_upgrade_all"),
+  brewUninstall: (targets: BrewTarget[], zap: boolean) =>
+    invoke<BrewResult>("brew_uninstall", { targets, zap }),
+  brewAddTap: (name: string) => invoke<BrewResult>("brew_add_tap", { name }),
+  brewRemoveTap: (name: string) => invoke<BrewResult>("brew_remove_tap", { name }),
 
   analyze: (path: string) => invoke<AnalyzeReport>("analyze_dir", { path }),
   analyzeShortcuts: () => invoke<[string, string][]>("analyze_shortcuts"),

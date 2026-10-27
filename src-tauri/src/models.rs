@@ -271,6 +271,104 @@ pub struct HistoryEntry {
     pub detail: String,
 }
 
+/* ------------------------------- configs ------------------------------- */
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigPathInfo {
+    pub path: String,
+    pub display: String,
+    pub kind: String,
+    pub is_dir: bool,
+    pub size: u64,
+    pub file_count: u64,
+    pub modified: i64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigTool {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    /// 命令行工具是否仍能在 PATH 中找到；为 false 时这些目录更可能是残留。
+    pub command_available: bool,
+    pub total_size: u64,
+    pub total_files: u64,
+    pub modified: i64,
+    pub paths: Vec<ConfigPathInfo>,
+}
+
+/* -------------------------------- brew --------------------------------- */
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrewPackage {
+    pub name: String,
+    pub display_name: String,
+    pub full_name: String,
+    /// `formula` 或 `cask`
+    pub kind: String,
+    pub version: String,
+    pub latest_version: Option<String>,
+    pub outdated: bool,
+    pub pinned: bool,
+    pub description: String,
+    pub homepage: String,
+    pub tap: String,
+    pub installed_at: Option<i64>,
+    pub requested: bool,
+    pub dependencies: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrewTap {
+    pub name: String,
+    pub official: bool,
+    pub path: String,
+    pub formula_count: usize,
+    pub cask_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrewOverview {
+    pub available: bool,
+    pub brew_path: Option<String>,
+    pub version: Option<String>,
+    pub prefix: Option<String>,
+    pub packages: Vec<BrewPackage>,
+    pub taps: Vec<BrewTap>,
+    pub formula_count: usize,
+    pub cask_count: usize,
+    pub outdated_count: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrewTarget {
+    pub name: String,
+    /// `formula` 或 `cask`
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrewFailure {
+    pub name: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BrewResult {
+    pub ok: Vec<String>,
+    pub failed: Vec<BrewFailure>,
+    pub output: String,
+}
+
 /* ------------------------------- settings ------------------------------ */
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

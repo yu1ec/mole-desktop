@@ -1,7 +1,9 @@
 import {
   Activity,
   AppWindow,
+  Beer,
   Brush,
+  FileCog,
   FolderX,
   Gauge,
   History,
@@ -24,6 +26,8 @@ const NAV: { group: string; items: { key: PageKey; label: string; icon: typeof L
     items: [
       { key: "clean", label: "深度清理", icon: Sparkles },
       { key: "uninstall", label: "应用卸载", icon: AppWindow },
+      { key: "configs", label: "配置管理", icon: FileCog },
+      { key: "brew", label: "Homebrew", icon: Beer },
       { key: "optimize", label: "系统优化", icon: ShieldCheck },
       { key: "projects", label: "项目清理", icon: FolderX },
       { key: "installers", label: "安装包", icon: Package },
