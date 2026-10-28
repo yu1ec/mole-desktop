@@ -58,6 +58,12 @@ export interface OperationResult {
   movedToTrash: boolean;
 }
 
+export interface EntryTrashResult {
+  path: string;
+  /** 是否可以在本次会话中恢复到原位置 */
+  restorable: boolean;
+}
+
 export interface DiskInfo {
   name: string;
   mount: string;
@@ -198,10 +204,16 @@ export interface OptimizeResult {
   messages: string[];
 }
 
+/** 删除风险：safe 可自动重建、caution 会丢失配置、keep 禁止删除。 */
+export type ConfigSafety = "safe" | "caution" | "keep";
+
 export interface ConfigPathInfo {
   path: string;
   display: string;
   kind: string;
+  /** 这条路径里具体存了什么。 */
+  description: string;
+  safety: ConfigSafety;
   isDir: boolean;
   size: number;
   fileCount: number;
@@ -213,8 +225,12 @@ export interface ConfigTool {
   name: string;
   description: string;
   category: string;
+  /** 该工具是否提供 CLI。 */
+  hasCli: boolean;
   /** false 表示命令已不在 PATH 中，这些目录更可能是残留。 */
   commandAvailable: boolean;
+  /** 是否在应用目录中找到对应的桌面应用。 */
+  appInstalled: boolean;
   totalSize: number;
   totalFiles: number;
   modified: number;

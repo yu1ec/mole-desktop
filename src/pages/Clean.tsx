@@ -37,6 +37,7 @@ export function Clean() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState<OperationResult | null>(null);
   const [detailItem, setDetailItem] = useState<CleanItem | null>(null);
+  const [detailDirty, setDetailDirty] = useState(false);
   const initialized = useRef(false);
 
   // A new scan means the per-directory breakdowns may be stale.
@@ -292,10 +293,19 @@ export function Clean() {
             key: detailItem.id,
             title: `${detailItem.label} · ${formatBytes(detailItem.size)}`,
             description:
-              "以下目录与文件会在执行清理时被删除，清理不会触碰该范围之外的路径。",
+              "以下目录与文件会在执行清理时被删除；也可以点击右侧按钮单独删除，删除后可恢复。",
             load: (path) => api.cleanItemDetail(detailItem.id, path),
+            remove: (path) => api.deleteCleanEntry(detailItem.id, path),
+            onChanged: () => setDetailDirty(true),
           }}
-          onClose={() => setDetailItem(null)}
+          onClose={() => {
+            setDetailItem(null);
+            if (detailDirty) {
+              setDetailDirty(false);
+              clearCleanDetailCache();
+              void runScan();
+            }
+          }}
         />
       )}
 

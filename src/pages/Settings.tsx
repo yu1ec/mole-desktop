@@ -48,7 +48,11 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
   { value: "dark", label: "暗色", icon: Moon },
 ];
 
-export function SettingsPage() {
+export function SettingsPage({
+  initialUpdate = null,
+}: {
+  initialUpdate?: UpdateCheckResult | null;
+}) {
   const toast = useToast();
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -56,7 +60,7 @@ export function SettingsPage() {
   const [rootsText, setRootsText] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [update, setUpdate] = useState<UpdateCheckResult | null>(null);
+  const [update, setUpdate] = useState<UpdateCheckResult | null>(initialUpdate);
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
@@ -90,6 +94,11 @@ export function SettingsPage() {
       .then(setPermission)
       .catch(() => {});
   }, []);
+
+  // 后台检查完成得比进入设置页更晚时，补上结果。
+  useEffect(() => {
+    if (initialUpdate?.updateAvailable) setUpdate(initialUpdate);
+  }, [initialUpdate]);
 
   // 从系统设置切回窗口时静默刷新权限状态。
   useEffect(() => {

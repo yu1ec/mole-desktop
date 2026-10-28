@@ -1,8 +1,17 @@
-import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ChevronRight, File, Folder, FolderOpen } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  ChevronRight,
+  File,
+  Folder,
+  FolderOpen,
+  Loader2,
+  Trash2,
+  Undo2,
+} from "lucide-react";
 import { api } from "../api";
 import { formatBytes } from "../format";
-import type { CleanDetail } from "../types";
+import type { CleanDetail, CleanEntry, EntryTrashResult } from "../types";
 import { Button, EmptyState, Modal, Spinner, useToast } from "./ui";
 
 // Browsing one directory level at a time keeps each request cheap; remembering
@@ -17,6 +26,22 @@ function cacheKey(itemId: string, path: string | null) {
   return `${itemId}::${path ?? ""}`;
 }
 
+/** Drops every cached level of one source after its contents change. */
+function invalidateSource(key: string) {
+  const prefix = `${key}::`;
+  for (const cached of [...detailCache.keys()]) {
+    if (cached.startsWith(prefix)) detailCache.delete(cached);
+  }
+}
+
+type RemovedEntry = {
+  entry: CleanEntry;
+  /** 能否通过界面恢复到原位置 */
+  restorable: boolean;
+  /** 删除时所在的目录；重新加载同一层时用它把划线条目放回来 */
+  view: string | null;
+};
+
 export type DetailSource = {
   /** 缓存命名空间，同一来源的不同目录层级共享一份缓存 */
   key: string;
@@ -25,6 +50,12 @@ export type DetailSource = {
   /** 打开时直接进入的目录；留空表示先展示全部根目录 */
   initialPath?: string | null;
   load: (path: string | null) => Promise<CleanDetail>;
+  /** 删除单个条目；留空表示该列表只读 */
+  remove?: (path: string) => Promise<EntryTrashResult>;
+  /** 返回 false 的条目不显示删除按钮（例如受保护的配置路径） */
+  canRemove?: (entry: CleanEntry) => boolean;
+  /** 删除成功后通知调用方刷新外层统计 */
+  onChanged?: () => void;
 };
 
 export function CleanDetailModal({
@@ -37,10 +68,13 @@ export function CleanDetailModal({
   const toast = useToast();
   const [path, setPath] = useState<string | null>(source.initialPath ?? null);
   const [detail, setDetail] = useState<CleanDetail | null>(null);
+  const [removed, setRemoved] = useState<Record<string, RemovedEntry>>({});
+  const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const requestRef = useRef(0);
-  const { key, title, description, load } = source;
+  const busyRef = useRef(false);
+  const { key, title, description, load, remove, canRemove, onChanged } = source;
 
   useEffect(() => {
     // Invalidate any in-flight scan before touching state, including cache hits.
@@ -68,6 +102,86 @@ export function CleanDetailModal({
         if (request === requestRef.current) setLoading(false);
       });
   }, [key, path]);
+
+  const removeEntry = async (entry: CleanEntry) => {
+    if (!remove || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(entry.path);
+    try {
+      const result = await remove(entry.path);
+      invalidateSource(key);
+      setRemoved((current) => ({
+        ...current,
+        [entry.path]: { entry, restorable: result.restorable, view: path },
+      }));
+      setDetail((current) =>
+        current
+          ? {
+              ...current,
+              entries: current.entries.filter((item) => item.path !== entry.path),
+              totalSize: Math.max(0, current.totalSize - entry.size),
+              fileCount: Math.max(0, current.fileCount - entry.fileCount),
+            }
+          : current,
+      );
+      onChanged?.();
+      toast(result.restorable ? "已移入废纸篓，可随时恢复" : "已删除", "success");
+    } catch (err) {
+      toast(String(err), "error");
+    } finally {
+      busyRef.current = false;
+      setBusy(null);
+    }
+  };
+
+  const restoreEntry = async (entry: CleanEntry) => {
+    const record = removed[entry.path];
+    if (!record?.restorable || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(entry.path);
+    try {
+      await api.restoreTrashedEntry(entry.path);
+      invalidateSource(key);
+      setRemoved((current) => {
+        const next = { ...current };
+        delete next[entry.path];
+        return next;
+      });
+      setDetail((current) => {
+        if (!current) return current;
+        const entries = current.entries.some((item) => item.path === entry.path)
+          ? current.entries
+          : [...current.entries, entry].sort((a, b) => b.size - a.size);
+        return {
+          ...current,
+          entries,
+          totalSize: current.totalSize + entry.size,
+          fileCount: current.fileCount + entry.fileCount,
+        };
+      });
+      toast("已恢复到原位置", "success");
+    } catch (err) {
+      toast(String(err), "error");
+    } finally {
+      busyRef.current = false;
+      setBusy(null);
+    }
+  };
+
+  // Deleted rows stay in the list (struck through) so the undo button remains
+  // reachable, including after reloading the same directory from the backend.
+  const rows = useMemo(() => {
+    if (!detail) return [];
+    const removedHere = Object.values(removed).filter((record) => record.view === detail.current);
+    const deleted = new Set(removedHere.map((record) => record.entry.path));
+    const entries = [
+      ...detail.entries.filter((entry) => !deleted.has(entry.path)),
+      ...removedHere.map((record) => record.entry),
+    ];
+    return entries
+      .map((entry) => ({ entry, record: removed[entry.path] }))
+      .sort((a, b) => b.entry.size - a.entry.size);
+  }, [detail, removed]);
 
   const revealTarget = detail?.current ?? detail?.roots[0] ?? null;
   const total = detail?.totalSize ?? 0;
@@ -141,7 +255,7 @@ export function CleanDetailModal({
               </div>
             </div>
 
-            {detail.entries.length === 0 ? (
+            {rows.length === 0 ? (
               <EmptyState
                 icon={<FolderOpen size={22} />}
                 title="这里没有内容"
@@ -149,44 +263,86 @@ export function CleanDetailModal({
               />
             ) : (
               <div className="clean-detail-list">
-                {detail.entries.map((entry) => (
-                  <button
-                    key={entry.path}
-                    className={`clean-detail-row ${entry.isDir ? "is-dir" : ""}`}
-                    title={
-                      entry.isDir
-                        ? `查看 ${entry.path}`
-                        : `在 Finder 中显示 ${entry.path}`
-                    }
-                    onClick={() => {
-                      if (entry.isDir) setPath(entry.path);
-                      else api.reveal(entry.path).catch(() => toast("无法打开文件", "error"));
-                    }}
-                  >
-                    <span className={`size-icon ${entry.isDir ? "is-dir" : ""}`}>
-                      {entry.isDir ? <Folder size={14} /> : <File size={14} />}
-                    </span>
-                    <span className="size-main">
-                      <span className="size-name">{entry.name}</span>
-                      <span className="size-bar">
-                        <i
-                          style={{
-                            width: `${total ? (entry.size / total) * 100 : 0}%`,
-                          }}
-                        />
-                      </span>
-                    </span>
-                    {entry.isDir && (
-                      <span className="clean-detail-count">
-                        {entry.fileCount.toLocaleString()} 个文件
-                      </span>
-                    )}
-                    <em>{formatBytes(entry.size)}</em>
-                    {entry.isDir && (
-                      <ChevronRight size={14} className="clean-detail-arrow" />
-                    )}
-                  </button>
-                ))}
+                {rows.map(({ entry, record }) => {
+                  const deleted = !!record;
+                  const canDelete = !!remove && (canRemove?.(entry) ?? true);
+                  const busyHere = busy === entry.path;
+                  return (
+                    <div
+                      key={entry.path}
+                      className={`clean-detail-row ${entry.isDir ? "is-dir" : ""} ${deleted ? "is-deleted" : ""}`}
+                    >
+                      <button
+                        className="clean-detail-open"
+                        disabled={deleted}
+                        title={
+                          deleted
+                            ? record.restorable
+                              ? "已移入废纸篓"
+                              : "已删除"
+                            : entry.isDir
+                              ? `查看 ${entry.path}`
+                              : `在 Finder 中显示 ${entry.path}`
+                        }
+                        onClick={() => {
+                          if (deleted) return;
+                          if (entry.isDir) setPath(entry.path);
+                          else api.reveal(entry.path).catch(() => toast("无法打开文件", "error"));
+                        }}
+                      >
+                        <span className={`size-icon ${entry.isDir ? "is-dir" : ""}`}>
+                          {entry.isDir ? <Folder size={14} /> : <File size={14} />}
+                        </span>
+                        <span className="size-main">
+                          <span className="size-name">{entry.name}</span>
+                          <span className="size-bar">
+                            <i
+                              style={{
+                                width: `${total ? Math.min(100, (entry.size / total) * 100) : 0}%`,
+                              }}
+                            />
+                          </span>
+                        </span>
+                        {entry.isDir && (
+                          <span className="clean-detail-count">
+                            {entry.fileCount.toLocaleString()} 个文件
+                          </span>
+                        )}
+                        <em>{formatBytes(entry.size)}</em>
+                        {entry.isDir && (
+                          <ChevronRight size={14} className="clean-detail-arrow" />
+                        )}
+                      </button>
+
+                      {remove &&
+                        (record ? (
+                          record.restorable ? (
+                            <button
+                              className="clean-detail-action is-restore"
+                              disabled={busy !== null}
+                              onClick={() => restoreEntry(entry)}
+                              title="恢复到原位置"
+                              aria-label={`恢复 ${entry.name}`}
+                            >
+                              {busyHere ? <Loader2 size={14} className="spin" /> : <Undo2 size={14} />}
+                            </button>
+                          ) : (
+                            <span className="clean-detail-flag">已删除</span>
+                          )
+                        ) : canDelete ? (
+                          <button
+                            className="clean-detail-action"
+                            disabled={busy !== null}
+                            onClick={() => removeEntry(entry)}
+                            title="删除（移入废纸篓）"
+                            aria-label={`删除 ${entry.name}`}
+                          >
+                            {busyHere ? <Loader2 size={14} className="spin" /> : <Trash2 size={14} />}
+                          </button>
+                        ) : null)}
+                    </div>
+                  );
+                })}
               </div>
             )}
 

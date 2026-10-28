@@ -9,9 +9,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { api } from "../api";
-import { useCachedQuery } from "../cache";
+import { invalidateCachePrefix, useCachedQuery } from "../cache";
 import { formatBytes, relativeTime } from "../format";
-import type { ConfigTool, OperationResult } from "../types";
+import type { ConfigPathInfo, ConfigSafety, ConfigTool, OperationResult } from "../types";
 import {
   Button,
   Card,
@@ -25,6 +25,80 @@ import { CleanDetailModal, clearCleanDetailCache } from "../components/CleanDeta
 
 const EMPTY_TOOLS: ConfigTool[] = [];
 
+const SAFETY_ORDER: ConfigSafety[] = ["safe", "caution", "keep"];
+
+const SAFETY_META: Record<
+  ConfigSafety,
+  { label: string; hint: string; tone: string; title: string }
+> = {
+  safe: {
+    label: "可自动重建",
+    hint: "缓存与依赖，删除后会自动重建",
+    tone: "safety-safe",
+    title: "缓存、临时文件或可重新下载的依赖，删除后工具会自动重建。",
+  },
+  caution: {
+    label: "会丢失配置",
+    hint: "配置、凭证与历史，删除后需重新设置",
+    tone: "safety-caution",
+    title:
+      "配置、登录凭证或历史记录，删除后需要重新配置或登录，部分数据无法恢复。",
+  },
+  keep: {
+    label: "禁止删除",
+    hint: "删除会破坏当前环境",
+    tone: "safety-keep",
+    title: "删除可能直接破坏当前环境，已禁止选择。如需清理请手动处理。",
+  },
+};
+
+/** 删除成功后立刻从界面移除这些路径，后台扫描只用于校正剩余大小。 */
+function withoutPaths(tools: ConfigTool[], removed: string[]): ConfigTool[] {
+  const gone = new Set(removed);
+  return tools
+    .map((tool) => {
+      const paths = tool.paths.filter((path) => !gone.has(path.path));
+      if (paths.length === tool.paths.length) return tool;
+      return {
+        ...tool,
+        paths,
+        totalSize: paths.reduce((total, path) => total + path.size, 0),
+        totalFiles: paths.reduce((total, path) => total + path.fileCount, 0),
+      };
+    })
+    .filter((tool) => tool.paths.length > 0);
+}
+
+/** 优先看 CLI，其次看桌面应用；都没有才视为残留配置。 */
+function toolStatus(tool: ConfigTool) {
+  if (tool.commandAvailable) {
+    return {
+      label: "CLI 可用",
+      tone: "badge-ok",
+      title: "命令行工具仍可在 PATH 或常见包管理器目录中找到",
+    };
+  }
+  if (tool.appInstalled) {
+    return {
+      label: "应用已安装",
+      tone: "badge-ok",
+      title: "在应用目录中找到该工具，这些配置可能仍在使用",
+    };
+  }
+  if (tool.hasCli) {
+    return {
+      label: "未检测到 CLI",
+      tone: "badge-warn",
+      title: "未在 PATH 或常见包管理器目录中找到命令，这些目录可能只是残留",
+    };
+  }
+  return {
+    label: "仅残留数据",
+    tone: "badge-warn",
+    title: "未找到对应的桌面应用，这些目录可能只是残留",
+  };
+}
+
 export function Configs() {
   const toast = useToast();
   const {
@@ -33,12 +107,14 @@ export function Configs() {
     refreshing,
     error,
     refresh,
+    mutate,
   } = useCachedQuery<ConfigTool[]>("configs", api.scanConfigs, { ttl: 60_000 });
   const tools = toolData ?? EMPTY_TOOLS;
   const [query, setQuery] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<{ tool: ConfigTool; path: string | null } | null>(null);
+  const [detailDirty, setDetailDirty] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<OperationResult | null>(null);
@@ -58,6 +134,11 @@ export function Configs() {
     setSelected(new Set());
   }, [activeId]);
 
+  const selectablePaths = active
+    ? active.paths.filter((path) => path.safety !== "keep")
+    : [];
+  const protectedCount = active ? active.paths.length - selectablePaths.length : 0;
+
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return tools;
@@ -75,12 +156,16 @@ export function Configs() {
     : [];
   const selectedSize = selectedPaths.reduce((total, path) => total + path.size, 0);
   const totalSize = tools.reduce((total, tool) => total + tool.totalSize, 0);
+  const protectedRoots = detail
+    ? detail.tool.paths.filter((path) => path.safety === "keep").map((path) => path.path)
+    : [];
 
-  const togglePath = (path: string, checked: boolean) => {
+  const togglePath = (path: ConfigPathInfo, checked: boolean) => {
+    if (path.safety === "keep") return;
     setSelected((current) => {
       const next = new Set(current);
-      if (checked) next.add(path);
-      else next.delete(path);
+      if (checked) next.add(path.path);
+      else next.delete(path.path);
       return next;
     });
   };
@@ -97,7 +182,12 @@ export function Configs() {
       );
       setSelected(new Set());
       clearCleanDetailCache();
-      await refresh({ force: true });
+      if (data.removed.length > 0) {
+        mutate((current) => withoutPaths(current, data.removed));
+      }
+      // 重新统计目录可能很慢，放到后台进行，不再阻塞按钮。
+      invalidateCachePrefix("configs");
+      void refresh({ force: true });
     } catch (err) {
       toast(String(err), "error");
     } finally {
@@ -111,7 +201,7 @@ export function Configs() {
         <div>
           <h1>配置管理</h1>
           <p>
-            查看 Codex、Pi、OpenCode 等开发工具留下的配置、会话与缓存
+            AI 编程、编辑器、终端、版本控制与包管理器留下的配置、会话与缓存
             {tools.length > 0 ? ` · ${tools.length} 个工具 · ${formatBytes(totalSize)}` : ""}
           </p>
         </div>
@@ -132,7 +222,7 @@ export function Configs() {
         <EmptyState
           icon={<FileCog size={24} />}
           title="没有发现开发工具配置"
-          hint="扫描范围包括 Codex、Claude Code、OpenCode、Pi、Gemini CLI 等常见目录。"
+          hint="扫描范围包括 AI 编程工具、编辑器、Shell、Git、Docker 与常见包管理器的配置目录。"
           action={
             <Button icon={<RefreshCw size={15} />} onClick={() => refresh({ force: true })}>
               重新扫描
@@ -157,6 +247,7 @@ export function Configs() {
                 <button
                   key={tool.id}
                   className={`app-row ${activeId === tool.id ? "is-active" : ""}`}
+                  title={tool.description}
                   onClick={() => setActiveId(tool.id)}
                 >
                   <span className="app-avatar">{tool.name.slice(0, 1).toUpperCase()}</span>
@@ -164,7 +255,7 @@ export function Configs() {
                     <strong>{tool.name}</strong>
                     <span>
                       {tool.category}
-                      {tool.commandAvailable ? "" : " · 仅残留配置"}
+                      {tool.commandAvailable || tool.appInstalled ? "" : " · 仅残留配置"}
                     </span>
                   </span>
                   <em>{formatBytes(tool.totalSize)}</em>
@@ -201,15 +292,11 @@ export function Configs() {
 
                 <div className="detail-actions">
                   <span
-                    className={`badge ${active.commandAvailable ? "badge-ok" : "badge-warn"}`}
-                    title={
-                      active.commandAvailable
-                        ? "命令行工具仍可在 PATH 中找到"
-                        : "未在 PATH 中找到对应命令，这些目录可能只是残留"
-                    }
+                    className={`badge ${toolStatus(active).tone}`}
+                    title={toolStatus(active).title}
                   >
                     <Terminal size={12} />
-                    {active.commandAvailable ? "CLI 可用" : "未检测到 CLI"}
+                    {toolStatus(active).label}
                   </span>
                   <Button
                     size="sm"
@@ -229,16 +316,39 @@ export function Configs() {
                         : "默认不选中，避免误删"}
                     </span>
                   </div>
+                  <div className="safety-legend">
+                    {SAFETY_ORDER.map((key) => (
+                      <span key={key} title={SAFETY_META[key].title}>
+                        <i className={`config-safety ${SAFETY_META[key].tone}`}>
+                          {SAFETY_META[key].label}
+                        </i>
+                        {SAFETY_META[key].hint}
+                      </span>
+                    ))}
+                  </div>
                   <div className="config-path-list">
                     {active.paths.map((path) => (
-                      <div className="config-path-row" key={path.path}>
+                      <div
+                        className={`config-path-row ${
+                          path.safety === "keep" ? "is-protected" : ""
+                        }`}
+                        key={path.path}
+                      >
                         <Checkbox
                           className="config-path-check"
                           checked={selected.has(path.path)}
-                          onChange={(checked) => togglePath(path.path, checked)}
+                          disabled={path.safety === "keep"}
+                          onChange={(checked) => togglePath(path, checked)}
                           label={
                             <span className="config-path-label">
                               <span className="config-kind">{path.kind}</span>
+                              <span
+                                className={`config-safety ${SAFETY_META[path.safety].tone}`}
+                                title={SAFETY_META[path.safety].title}
+                              >
+                                {SAFETY_META[path.safety].label}
+                              </span>
+                              <span className="config-path-desc">{path.description}</span>
                               <em>{formatBytes(path.size)}</em>
                             </span>
                           }
@@ -279,17 +389,22 @@ export function Configs() {
                 <div className="detail-foot">
                   <Checkbox
                     checked={
-                      active.paths.length > 0 && selected.size === active.paths.length
+                      selectablePaths.length > 0 &&
+                      selectablePaths.every((path) => selected.has(path.path))
                     }
                     onChange={(checked) =>
                       setSelected(
                         checked
-                          ? new Set(active.paths.map((path) => path.path))
+                          ? new Set(selectablePaths.map((path) => path.path))
                           : new Set(),
                       )
                     }
-                    label="选择全部位置"
-                    hint="清理时会移入系统废纸篓，可在废纸篓中恢复。"
+                    label="选择全部可删除位置"
+                    hint={
+                      protectedCount > 0
+                        ? `${protectedCount} 个受保护位置不会选中；清理时会移入系统废纸篓，可在废纸篓中恢复。`
+                        : "清理时会移入系统废纸篓，可在废纸篓中恢复。"
+                    }
                   />
                   <div className="detail-foot-actions">
                     <span className="muted small">
@@ -340,7 +455,12 @@ export function Configs() {
         <ul className="confirm-list">
           {selectedPaths.slice(0, 12).map((path) => (
             <li key={path.path}>
-              <span title={path.path}>{path.display}</span>
+              <span title={path.path}>
+                <i className={`config-safety ${SAFETY_META[path.safety].tone}`}>
+                  {SAFETY_META[path.safety].label}
+                </i>
+                {path.display}
+              </span>
               <em>{formatBytes(path.size)}</em>
             </li>
           ))}
@@ -383,11 +503,28 @@ export function Configs() {
           source={{
             key: `config:${detail.tool.id}`,
             title: `${detail.tool.name} 配置明细`,
-            description: "只在本地读取；点击文件夹可以继续查看下一级内容。",
+            description: "点击文件夹可以继续查看下一级内容；右侧按钮可单独删除，删除后会移入废纸篓。",
             initialPath: detail.path,
             load: (path) => api.configDetail(detail.tool.id, path),
+            remove: (path) => api.deleteConfigEntry(detail.tool.id, path),
+            canRemove: (entry) =>
+              !protectedRoots.some(
+                (root) =>
+                  entry.path === root ||
+                  entry.path.startsWith(`${root}/`) ||
+                  entry.path.startsWith(`${root}\\`),
+              ),
+            onChanged: () => setDetailDirty(true),
           }}
-          onClose={() => setDetail(null)}
+          onClose={() => {
+            setDetail(null);
+            if (detailDirty) {
+              setDetailDirty(false);
+              clearCleanDetailCache();
+              invalidateCachePrefix("configs");
+              void refresh({ force: true });
+            }
+          }}
         />
       )}
     </div>

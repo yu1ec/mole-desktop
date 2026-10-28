@@ -73,10 +73,12 @@ export function Sidebar({
   page,
   onNavigate,
   snapshot,
+  updateAvailable = false,
 }: {
   page: PageKey;
   onNavigate: (page: PageKey) => void;
   snapshot: SystemSnapshot | null;
+  updateAvailable?: boolean;
 }) {
   const health = snapshot?.healthScore ?? 0;
   const tone = health >= 80 ? "ok" : health >= 55 ? "warn" : "bad";
@@ -104,6 +106,9 @@ export function Sidebar({
                 >
                   <Icon size={17} strokeWidth={1.9} />
                   <span>{item.label}</span>
+                  {item.key === "settings" && updateAvailable && (
+                    <span className="nav-badge">新版本</span>
+                  )}
                 </button>
               );
             })}

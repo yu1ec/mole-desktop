@@ -65,6 +65,15 @@ pub struct CleanDetail {
     pub errors: usize,
 }
 
+/// Result of removing a single entry from the detail browser. `restorable` is
+/// false for platforms where the app cannot move the item back by itself.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntryTrashResult {
+    pub path: String,
+    pub restorable: bool,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OperationResult {
@@ -279,6 +288,10 @@ pub struct ConfigPathInfo {
     pub path: String,
     pub display: String,
     pub kind: String,
+    /// 这条路径里具体存了什么。
+    pub description: String,
+    /// 删除风险：`safe` 可自动重建、`caution` 会丢失配置、`keep` 禁止删除。
+    pub safety: String,
     pub is_dir: bool,
     pub size: u64,
     pub file_count: u64,
@@ -292,8 +305,12 @@ pub struct ConfigTool {
     pub name: String,
     pub description: String,
     pub category: String,
-    /// 命令行工具是否仍能在 PATH 中找到；为 false 时这些目录更可能是残留。
+    /// 该工具是否提供 CLI（为 false 时只看应用包是否安装）。
+    pub has_cli: bool,
+    /// 命令行工具是否仍能在 PATH 中找到。
     pub command_available: bool,
+    /// 是否在应用目录中找到对应的桌面应用。
+    pub app_installed: bool,
     pub total_size: u64,
     pub total_files: u64,
     pub modified: i64,

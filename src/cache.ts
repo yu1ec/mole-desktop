@@ -49,6 +49,8 @@ export interface CachedQueryResult<T> {
   refreshing: boolean;
   error: string;
   refresh: (options?: { force?: boolean }) => Promise<T | undefined>;
+  /** 本地改写缓存，用于删除后立即更新界面；后续刷新会以磁盘为准覆盖。 */
+  mutate: (updater: (data: T) => T) => void;
 }
 
 /**
@@ -81,6 +83,8 @@ export function useCachedQuery<T>(
   fetcherRef.current = fetcher;
   const ttlRef = useRef(ttl);
   ttlRef.current = ttl;
+  // 删除后会连续触发刷新；只让最后一次请求写回状态，避免旧扫描覆盖新结果。
+  const requestRef = useRef(0);
 
   const refresh = useCallback(
     async (opts?: { force?: boolean }) => {
@@ -94,15 +98,20 @@ export function useCachedQuery<T>(
       if (!current) setLoading(true);
       setRefreshing(true);
       setError("");
+      const request = ++requestRef.current;
       try {
         const data = await fetchCached(key, () => fetcherRef.current());
-        if (keyRef.current === key) setState({ key, data });
+        if (keyRef.current === key && requestRef.current === request) {
+          setState({ key, data });
+        }
         return data;
       } catch (err) {
-        if (keyRef.current === key) setError(String(err));
+        if (keyRef.current === key && requestRef.current === request) {
+          setError(String(err));
+        }
         return undefined;
       } finally {
-        if (keyRef.current === key) {
+        if (keyRef.current === key && requestRef.current === request) {
           setLoading(false);
           setRefreshing(false);
         }
@@ -127,6 +136,24 @@ export function useCachedQuery<T>(
     void refresh();
   }, [key, enabled, refresh]);
 
+  const mutate = useCallback(
+    (updater: (data: T) => T) => {
+      if (!key || keyRef.current !== key) return;
+      const entry = store.get(key) as CacheEntry<T> | undefined;
+      // 缓存可能正被后台刷新（entry 存在但 data 尚未写入），此时直接改界面状态，
+      // 否则删除后列表不会立即更新。
+      if (entry && entry.data !== undefined) {
+        entry.data = updater(entry.data);
+        entry.updatedAt = Date.now();
+      }
+      setState((prev) => {
+        if (prev.key !== key || prev.data === undefined) return prev;
+        return { key, data: entry?.data ?? updater(prev.data) };
+      });
+    },
+    [key],
+  );
+
   // Ignore stale values from the previous key for the first render after a switch.
   const isCurrent = state.key === key;
   return {
@@ -135,5 +162,6 @@ export function useCachedQuery<T>(
     refreshing: isCurrent ? refreshing : false,
     error: isCurrent ? error : "",
     refresh,
+    mutate,
   };
 }

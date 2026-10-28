@@ -43,6 +43,7 @@ export function Projects() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [result, setResult] = useState<OperationResult | null>(null);
   const [detailItem, setDetailItem] = useState<ProjectArtifact | null>(null);
+  const [detailDirty, setDetailDirty] = useState(false);
   const initialized = useRef(false);
 
   // A new scan means the per-directory breakdowns may be stale.
@@ -283,10 +284,19 @@ export function Projects() {
             key: `artifact:${detailItem.path}`,
             title: `${detailItem.kind} · ${formatBytes(detailItem.size)}`,
             description:
-              "该构建产物会被整体永久删除，以下目录与文件都在删除范围内。",
+              "以下目录与文件都在删除范围内；也可以点击右侧按钮单独删除，删除后仍可恢复。",
             load: (path) => api.projectArtifactDetail(detailItem.path, path),
+            remove: (path) => api.deleteProjectEntry(detailItem.path, path),
+            onChanged: () => setDetailDirty(true),
           }}
-          onClose={() => setDetailItem(null)}
+          onClose={() => {
+            setDetailItem(null);
+            if (detailDirty) {
+              setDetailDirty(false);
+              clearCleanDetailCache();
+              void scan();
+            }
+          }}
         />
       )}
 

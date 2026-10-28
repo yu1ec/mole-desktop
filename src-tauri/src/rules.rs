@@ -626,6 +626,28 @@ pub fn detail(id: &str, path: Option<&str>) -> Result<CleanDetail, String> {
     })
 }
 
+/// Resolved roots for a rule. Shared by the detail browser and single-entry
+/// deletion so both agree on what belongs to the rule.
+pub(crate) fn guard_roots(id: &str) -> Result<Vec<PathBuf>, String> {
+    let rule = platform_rules()
+        .into_iter()
+        .find(|rule| rule.id == id)
+        .ok_or_else(|| format!("未知的清理项：{id}"))?;
+    let roots = resolve(&rule.patterns);
+    if roots.is_empty() {
+        return Err("当前系统中没有找到该项目对应的目录".into());
+    }
+    Ok(roots)
+}
+
+/// The overview shown at the rule root is cached from the last scan; deleting
+/// a single entry makes it stale.
+pub(crate) fn clear_overview_cache() {
+    if let Ok(mut cache) = overview_cache().lock() {
+        cache.clear();
+    }
+}
+
 pub fn clean(ids: &[String]) -> OperationResult {
     let mut result = OperationResult::default();
     let rules = platform_rules();

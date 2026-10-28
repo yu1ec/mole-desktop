@@ -11,6 +11,7 @@ import type {
   CleanScan,
   ConfigTool,
   DiskPermissionStatus,
+  EntryTrashResult,
   HistoryEntry,
   InstallerFile,
   Leftover,
@@ -31,6 +32,8 @@ export const api = {
   scanClean: () => invoke<CleanScan>("scan_clean"),
   cleanItemDetail: (itemId: string, path: string | null) =>
     invoke<CleanDetail>("clean_item_detail", { itemId, path }),
+  deleteCleanEntry: (itemId: string, path: string) =>
+    invoke<EntryTrashResult>("delete_clean_entry", { itemId, path }),
   runClean: (items: string[]) => invoke<OperationResult>("run_clean", { items }),
 
   listApps: () => invoke<AppEntry[]>("list_apps"),
@@ -42,6 +45,8 @@ export const api = {
   scanConfigs: () => invoke<ConfigTool[]>("scan_configs"),
   configDetail: (toolId: string, path: string | null) =>
     invoke<CleanDetail>("config_detail", { toolId, path }),
+  deleteConfigEntry: (toolId: string, path: string) =>
+    invoke<EntryTrashResult>("delete_config_entry", { toolId, path }),
   deleteConfigPaths: (paths: string[]) =>
     invoke<OperationResult>("delete_config_paths", { paths }),
 
@@ -65,6 +70,8 @@ export const api = {
   scanProjects: () => invoke<ProjectArtifact[]>("scan_projects"),
   projectArtifactDetail: (path: string, sub: string | null) =>
     invoke<CleanDetail>("project_artifact_detail", { path, sub }),
+  deleteProjectEntry: (root: string, path: string) =>
+    invoke<EntryTrashResult>("delete_project_entry", { root, path }),
   purgeProjects: (paths: string[]) =>
     invoke<OperationResult>("purge_projects", { paths }),
 
@@ -83,6 +90,7 @@ export const api = {
   downloadAndInstallUpdate: (accelerate: boolean) =>
     invoke<UpdateInstallResult>("download_and_install_update", { accelerate }),
   reveal: (path: string) => invoke<void>("reveal_path", { path }),
+  restoreTrashedEntry: (path: string) => invoke<void>("restore_trashed_entry", { path }),
   openExternal: (path: string) => invoke<void>("open_external", { path }),
   openDataDir: () => invoke<void>("open_data_dir"),
 

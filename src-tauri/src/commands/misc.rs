@@ -1,10 +1,12 @@
+use std::path::Path;
+
 use serde::Serialize;
 use tauri::State;
 
 use crate::models::{HistoryEntry, Settings};
 use crate::state::AppState;
 use crate::store::{clear_history as clear_store, load_history, load_settings, save_settings as save_store};
-use crate::util::{home, os_open};
+use crate::util::{home, os_open, restore_trashed_entry as restore_entry};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,4 +61,12 @@ pub fn open_data_dir(state: State<AppState>) -> Result<(), String> {
 #[tauri::command]
 pub fn open_external(path: String) -> Result<(), String> {
     os_open(&crate::util::expand_tilde(&path))
+}
+
+/// Moves an entry deleted from the detail browser back to its original path.
+#[tauri::command]
+pub fn restore_trashed_entry(path: String) -> Result<(), String> {
+    restore_entry(Path::new(&path))?;
+    crate::rules::clear_overview_cache();
+    Ok(())
 }

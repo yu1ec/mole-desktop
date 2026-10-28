@@ -2,12 +2,14 @@ use std::path::{Path, PathBuf};
 
 use tauri::State;
 
-use crate::models::{CleanDetail, CleanScan, HistoryEntry, InstallerFile, OperationResult};
+use crate::models::{
+    CleanDetail, CleanScan, EntryTrashResult, HistoryEntry, InstallerFile, OperationResult,
+};
 use crate::rules;
 use crate::state::AppState;
 use crate::store::push_history;
 use crate::util::{
-    deny_reason, expand_tilde, free_space, home, now_rfc3339, os_open, remove_path,
+    deny_reason, expand_tilde, free_space, home, now_rfc3339, os_open, remove_path, trash_entry,
 };
 
 #[tauri::command(async)]
@@ -28,6 +30,28 @@ pub fn scan_clean() -> CleanScan {
 #[tauri::command(async)]
 pub fn clean_item_detail(item_id: String, path: Option<String>) -> Result<CleanDetail, String> {
     rules::detail(&item_id, path.as_deref())
+}
+
+/// Removes one entry shown in the detail browser. The path must stay inside
+/// the rule's roots, and it goes to the trash so the UI can offer an undo.
+#[tauri::command(async)]
+pub fn delete_clean_entry(item_id: String, path: String) -> Result<EntryTrashResult, String> {
+    let roots = rules::guard_roots(&item_id)?;
+    let target = expand_tilde(path.trim());
+    let root = roots
+        .iter()
+        .filter(|root| target.starts_with(root))
+        .max_by_key(|root| root.components().count())
+        .ok_or_else(|| "路径不在该清理项范围内".to_string())?;
+    if let Some(reason) = deny_reason(&target, root) {
+        return Err(reason);
+    }
+    if !target.exists() {
+        return Err(format!("路径不存在：{}", target.display()));
+    }
+    let restorable = trash_entry(&target)?;
+    rules::clear_overview_cache();
+    Ok(EntryTrashResult { path, restorable })
 }
 
 #[tauri::command(async)]

@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use rayon::prelude::*;
@@ -263,6 +264,90 @@ pub fn move_to_trash(paths: &[PathBuf]) -> (u64, u64, Vec<String>) {
         }
     }
     (freed, files, errors)
+}
+
+/// Trashed entries that the app can still move back, mapped to their location
+/// inside the trash folder. Only populated on platforms where moving into the
+/// trash is a plain rename (macOS), so the mapping survives until restart.
+static TRASH_UNDO: OnceLock<Mutex<HashMap<PathBuf, PathBuf>>> = OnceLock::new();
+
+fn trash_undo() -> &'static Mutex<HashMap<PathBuf, PathBuf>> {
+    TRASH_UNDO.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Moves one entry to the system trash. Returns whether it can be restored by
+/// [`restore_trashed_entry`] (i.e. whether it went to the user's trash folder
+/// via a rename).
+pub fn trash_entry(path: &Path) -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(moved) = move_into_trash_folder(path) {
+            let restorable = match trash_undo().lock() {
+                Ok(mut undo) => {
+                    undo.insert(path.to_path_buf(), moved);
+                    true
+                }
+                Err(_) => false,
+            };
+            return Ok(restorable);
+        }
+        // Different volume: fall back to the platform trash, which cannot be
+        // moved back programmatically.
+    }
+    trash::delete(path).map_err(|err| format!("无法移入废纸篓 {}：{err}", path.display()))?;
+    Ok(false)
+}
+
+/// Restores an entry previously moved by [`trash_entry`] to its original path.
+pub fn restore_trashed_entry(path: &Path) -> Result<(), String> {
+    let undo = trash_undo();
+    let moved = {
+        let mut map = undo.lock().map_err(|_| "恢复队列不可用".to_string())?;
+        match map.get(path).cloned() {
+            Some(moved) => {
+                map.remove(path);
+                moved
+            }
+            None => {
+                return Err("无法自动恢复：该条目已不在本次会话的删除记录中，请从系统废纸篓手动恢复"
+                    .into())
+            }
+        }
+    };
+    let result = (|| {
+        if path.exists() {
+            return Err(format!("原位置已存在同名文件：{}", path.display()));
+        }
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|err| format!("无法创建恢复目录 {}：{err}", parent.display()))?;
+        }
+        fs::rename(&moved, path).map_err(|err| format!("无法恢复 {}：{err}", path.display()))
+    })();
+    if result.is_err() {
+        if let Ok(mut map) = undo.lock() {
+            map.insert(path.to_path_buf(), moved);
+        }
+    }
+    result
+}
+
+#[cfg(target_os = "macos")]
+fn move_into_trash_folder(path: &Path) -> Option<PathBuf> {
+    let trash = home().join(".Trash");
+    if fs::create_dir_all(&trash).is_err() {
+        return None;
+    }
+    let name = path.file_name()?;
+    let mut candidate = trash.join(name);
+    let mut index = 1;
+    while candidate.exists() {
+        index += 1;
+        let mut renamed = name.to_os_string();
+        renamed.push(format!(" {index}"));
+        candidate = trash.join(renamed);
+    }
+    fs::rename(path, &candidate).ok().map(|_| candidate)
 }
 
 pub fn free_space(path: &Path) -> u64 {

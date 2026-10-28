@@ -3,11 +3,16 @@ use std::path::{Path, PathBuf};
 use rayon::prelude::*;
 use tauri::State;
 
-use crate::models::{CleanCrumb, CleanDetail, HistoryEntry, OperationResult, ProjectArtifact};
+use crate::models::{
+    CleanCrumb, CleanDetail, EntryTrashResult, HistoryEntry, OperationResult, ProjectArtifact,
+};
 use crate::rules::{dir_detail_entries, display_path};
 use crate::state::AppState;
 use crate::store::{load_settings, push_history};
-use crate::util::{dir_stats, expand_tilde, home, mtime, now_rfc3339, now_ts, remove_path, unique_paths};
+use crate::util::{
+    dir_stats, expand_tilde, home, mtime, now_rfc3339, now_ts, remove_path, trash_entry,
+    unique_paths,
+};
 
 const ARTIFACT_NAMES: &[&str] = &[
     "node_modules",
@@ -201,6 +206,40 @@ pub fn project_artifact_detail(
         truncated,
         errors,
     })
+}
+
+#[tauri::command(async)]
+pub fn delete_project_entry(
+    root: String,
+    path: String,
+    state: State<AppState>,
+) -> Result<EntryTrashResult, String> {
+    let root = PathBuf::from(root);
+    let Some(kind) = root.file_name().map(|name| name.to_string_lossy().to_string()) else {
+        return Err("无效的构建产物路径".into());
+    };
+    if !is_artifact(&kind) {
+        return Err("不是可清理的构建产物".into());
+    }
+    if !root.is_dir() {
+        return Err(format!("目录不存在：{}", root.display()));
+    }
+    if !active_roots(&state.data_dir)
+        .iter()
+        .any(|allowed| root.starts_with(allowed))
+    {
+        return Err("该构建产物不在扫描目录中".into());
+    }
+
+    let target = PathBuf::from(path.trim());
+    if !target.starts_with(&root) {
+        return Err("路径不在该构建产物范围内".into());
+    }
+    if !target.exists() {
+        return Err(format!("路径不存在：{}", target.display()));
+    }
+    let restorable = trash_entry(&target)?;
+    Ok(EntryTrashResult { path, restorable })
 }
 
 #[tauri::command(async)]
