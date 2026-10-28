@@ -9,6 +9,7 @@ import {
   History,
   LayoutDashboard,
   Package,
+  ScrollText,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -44,6 +45,7 @@ const NAV: { group: string; items: { key: PageKey; label: string; icon: typeof L
     group: "其他",
     items: [
       { key: "history", label: "操作历史", icon: History },
+      { key: "changelog", label: "变更记录", icon: ScrollText },
       { key: "settings", label: "设置", icon: Settings },
     ],
   },

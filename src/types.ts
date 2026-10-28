@@ -369,4 +369,5 @@ export type PageKey =
   | "projects"
   | "installers"
   | "history"
+  | "changelog"
   | "settings";

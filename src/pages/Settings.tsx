@@ -13,6 +13,7 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  ScrollText,
   ShieldAlert,
   ShieldCheck,
   Sun,
@@ -22,6 +23,7 @@ import { api } from "../api";
 import type {
   AppInfo,
   DiskPermissionStatus,
+  PageKey,
   Settings,
   ThemeMode,
   UpdateCheckResult,
@@ -50,8 +52,10 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
 
 export function SettingsPage({
   initialUpdate = null,
+  onNavigate,
 }: {
   initialUpdate?: UpdateCheckResult | null;
+  onNavigate?: (page: PageKey) => void;
 }) {
   const toast = useToast();
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
@@ -511,6 +515,16 @@ export function SettingsPage({
               >
                 检查更新
               </Button>
+              {onNavigate && (
+                <Button
+                  size="sm"
+                  variant="quiet"
+                  icon={<ScrollText size={14} />}
+                  onClick={() => onNavigate("changelog")}
+                >
+                  变更记录
+                </Button>
+              )}
               {update?.updateAvailable && (
                 <Button
                   size="sm"

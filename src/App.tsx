@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Download, Sparkles, X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
-import { Button, ToastProvider } from "./components/ui";
+import { Button, Modal, ToastProvider } from "./components/ui";
+import { MarkdownView } from "./components/MarkdownView";
+import { notesFor, type ReleaseNotes } from "./changelog";
 import { api } from "./api";
 import type { PageKey, SystemSnapshot, UpdateCheckResult } from "./types";
 import { Dashboard } from "./pages/Dashboard";
@@ -15,6 +17,7 @@ import { Monitor } from "./pages/Monitor";
 import { Projects } from "./pages/Projects";
 import { Installers } from "./pages/Installers";
 import { HistoryPage } from "./pages/History";
+import { ChangelogPage } from "./pages/Changelog";
 import { SettingsPage } from "./pages/Settings";
 
 export default function App() {
@@ -22,6 +25,7 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);
   const [update, setUpdate] = useState<UpdateCheckResult | null>(null);
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
+  const [changelog, setChangelog] = useState<ReleaseNotes | null>(null);
 
   const refreshSnapshot = useCallback(async () => {
     try {
@@ -55,6 +59,27 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timer);
       window.clearInterval(interval);
+    };
+  }, []);
+
+  // 更新后重新打开应用时，弹出一次新版本的变更记录。首次安装只记录版本，
+  // 不额外打扰；记录保存在 localStorage，跨版本更新后仍会保留。
+  useEffect(() => {
+    let cancelled = false;
+    const key = "mole.changelog.seen-version";
+    api
+      .appInfo()
+      .then((info) => {
+        if (cancelled) return;
+        const seen = localStorage.getItem(key);
+        if (seen === info.version) return;
+        localStorage.setItem(key, info.version);
+        const notes = notesFor(info.version);
+        if (seen !== null && notes) setChangelog(notes);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
     };
   }, []);
 
@@ -121,8 +146,27 @@ export default function App() {
           {page === "projects" && <Projects />}
           {page === "installers" && <Installers />}
           {page === "history" && <HistoryPage />}
-          {page === "settings" && <SettingsPage initialUpdate={update} />}
+          {page === "changelog" && <ChangelogPage />}
+          {page === "settings" && (
+            <SettingsPage initialUpdate={update} onNavigate={setPage} />
+          )}
         </main>
+
+        {changelog && (
+          <Modal
+            open
+            title={`变更记录 v${changelog.version}`}
+            description="更新已完成，来看看这次有哪些变化"
+            onClose={() => setChangelog(null)}
+            footer={
+              <Button variant="primary" onClick={() => setChangelog(null)}>
+                知道了
+              </Button>
+            }
+          >
+            <MarkdownView source={changelog.body} />
+          </Modal>
+        )}
       </div>
     </ToastProvider>
   );

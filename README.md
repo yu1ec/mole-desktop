@@ -18,6 +18,7 @@
 | 安装包清理 | 扫描下载目录中的 `.dmg` / `.pkg` / `.exe` / `.msi` 等安装包 |
 | 历史与设置 | 清理历史记录、白名单、默认删除方式（废纸篓 / 永久删除）等本地持久化配置 |
 | 应用更新 | 检查 GitHub Releases 新版本，支持国内镜像加速下载；macOS 下载后原地替换并自动重启，其他平台启动官方安装程序 |
+| 变更记录 | 内置各版本发布说明，更新后重新打开应用时自动展示一次，也可随时从侧边栏查看 |
 
 ## 技术栈
 
@@ -37,7 +38,7 @@
 │   ├── api.ts              # invoke 封装
 │   ├── types.ts            # 与后端 models 对应的类型
 │   ├── components/         # Sidebar / Treemap / 通用 UI
-│   └── pages/              # 10 个功能页面
+│   └── pages/              # 11 个功能页面
 ├── src-tauri/              # Rust 后端
 │   ├── src/
 │   │   ├── commands/       # system / clean / apps / configs / brew / analyze / projects / optimize / misc
