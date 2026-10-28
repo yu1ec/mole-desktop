@@ -15,9 +15,13 @@ import {
   Sparkles,
   HardDrive,
 } from "lucide-react";
-import type { PageKey, SystemSnapshot } from "../types";
+import type { PageKey, Platform, SystemSnapshot } from "../types";
+import { usePlatform } from "../platform";
 
-const NAV: { group: string; items: { key: PageKey; label: string; icon: typeof LayoutDashboard }[] }[] = [
+const NAV: {
+  group: string;
+  items: { key: PageKey; label: string; icon: typeof LayoutDashboard; platforms?: Platform[] }[];
+}[] = [
   {
     group: "总览",
     items: [{ key: "dashboard", label: "仪表盘", icon: LayoutDashboard }],
@@ -28,7 +32,7 @@ const NAV: { group: string; items: { key: PageKey; label: string; icon: typeof L
       { key: "clean", label: "深度清理", icon: Sparkles },
       { key: "uninstall", label: "应用卸载", icon: AppWindow },
       { key: "configs", label: "配置管理", icon: FileCog },
-      { key: "brew", label: "Homebrew", icon: Beer },
+      { key: "brew", label: "Homebrew", icon: Beer, platforms: ["macos", "linux"] },
       { key: "optimize", label: "系统优化", icon: ShieldCheck },
       { key: "projects", label: "项目清理", icon: FolderX },
       { key: "installers", label: "安装包", icon: Package },
@@ -82,6 +86,13 @@ export function Sidebar({
   snapshot: SystemSnapshot | null;
   updateAvailable?: boolean;
 }) {
+  const platform = usePlatform();
+  const groups = NAV.map((group) => ({
+    ...group,
+    items: group.items.filter(
+      (item) => !item.platforms || item.platforms.includes(platform),
+    ),
+  })).filter((group) => group.items.length > 0);
   const health = snapshot?.healthScore ?? 0;
   const tone = health >= 80 ? "ok" : health >= 55 ? "warn" : "bad";
   return (
@@ -89,13 +100,20 @@ export function Sidebar({
       <div className="brand">
         <Logo />
         <div>
-          <strong>Mole Desktop</strong>
+          <strong>
+            Mole Desktop
+            {platform === "windows" && (
+              <em className="beta-tag" title="Windows 版本仍在测试中">
+                Beta
+              </em>
+            )}
+          </strong>
           <span>清理与系统工具箱</span>
         </div>
       </div>
 
       <nav>
-        {NAV.map((group) => (
+        {groups.map((group) => (
           <div className="nav-group" key={group.group}>
             <span className="nav-group-label">{group.group}</span>
             {group.items.map((item) => {

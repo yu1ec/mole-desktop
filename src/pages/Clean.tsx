@@ -22,9 +22,11 @@ import {
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
 import { CleanDetailModal, clearCleanDetailCache } from "../components/CleanDetailModal";
+import { trashName, usePlatform } from "../platform";
 
 export function Clean() {
   const toast = useToast();
+  const trash = trashName(usePlatform());
   const {
     data: scan,
     loading,
@@ -248,7 +250,7 @@ export function Clean() {
           <Card className="clean-note">
             <AlertTriangle size={16} />
             <p>
-              清理会永久删除缓存与日志（废纸篓除外）。点击每项右侧的<strong>查看明细</strong>
+              清理会永久删除缓存与日志（{trash}除外）。点击每项右侧的<strong>查看明细</strong>
               可逐层查看将被删除的目录与文件。标记为<strong>谨慎</strong>的项目可能包含需要重新下载或恢复的数据，
               默认不勾选。需要管理员权限的项目会在执行时请求授权或跳过。
             </p>

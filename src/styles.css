@@ -245,6 +245,23 @@ button {
   letter-spacing: 0.02em;
 }
 
+.brand .beta-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 196, 107, 0.3);
+  background: rgba(255, 196, 107, 0.12);
+  color: var(--warn);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.6;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
 nav {
   margin-top: 14px;
   overflow-y: auto;
@@ -395,16 +412,48 @@ nav {
   text-overflow: ellipsis;
 }
 
+/* Windows 有原生标题栏，默认窗口的可视高度更小；这里稍微压缩导航，
+   避免底部的「设置」等入口被裁掉。 */
+@media (max-height: 820px) {
+  .sidebar {
+    padding-top: 16px;
+    padding-bottom: 12px;
+  }
+
+  .brand {
+    padding-bottom: 12px;
+  }
+
+  nav {
+    margin-top: 10px;
+  }
+
+  .nav-group {
+    margin-bottom: 10px;
+  }
+
+  .nav-item {
+    padding: 7px 10px;
+  }
+
+  .sidebar-foot {
+    padding-top: 10px;
+  }
+}
+
 /* ---------------------------------- main --------------------------------- */
 
 .main {
   flex: 1;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   position: relative;
   z-index: 1;
 }
 
 .page {
+  width: 100%;
   max-width: 1180px;
   margin: 0 auto;
   padding: 28px 32px 56px;
@@ -504,7 +553,8 @@ nav {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
+  flex-wrap: wrap;
+  gap: 12px 18px;
   margin-bottom: 22px;
 }
 
@@ -1833,16 +1883,22 @@ section {
   gap: 14px;
 }
 
+.detail-head > div:not(.detail-size) {
+  min-width: 0;
+}
+
 .detail-head h2 {
   margin: 0;
   font-size: 19px;
   letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
 }
 
 .detail-head p {
   margin: 2px 0;
   font-size: 11.5px;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .detail-size {
@@ -1850,21 +1906,25 @@ section {
   text-align: right;
   display: flex;
   flex-direction: column;
+  flex: none;
 }
 
 .detail-size strong {
   font-size: 20px;
   letter-spacing: -0.03em;
+  white-space: nowrap;
 }
 
 .detail-size span {
   font-size: 10.5px;
   color: var(--dim);
+  white-space: nowrap;
 }
 
 .detail-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 14px;
 }
@@ -1958,9 +2018,15 @@ section {
   padding-top: 16px;
   border-top: 1px solid var(--border-soft);
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px 16px;
+}
+
+.detail-foot > .check {
+  flex: 1 1 240px;
+  min-width: 0;
 }
 
 .detail-foot-actions {
@@ -1968,6 +2034,20 @@ section {
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+}
+
+.detail-foot-actions .btn {
+  max-width: 100%;
+}
+
+.detail-foot-actions .btn > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* --------------------------------- analyze ------------------------------- */
@@ -3079,8 +3159,12 @@ section {
   color: var(--muted);
 }
 
-.about-head .badge {
+.about-badges {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
 }
 
 .about-grid {

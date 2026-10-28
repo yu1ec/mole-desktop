@@ -93,9 +93,11 @@ export interface ProcessInfo {
   exe: string;
 }
 
+export type Platform = "macos" | "windows" | "linux";
+
 export interface SystemSnapshot {
   host: string;
-  platform: "macos" | "windows" | "linux";
+  platform: Platform;
   osName: string;
   osVersion: string;
   arch: string;

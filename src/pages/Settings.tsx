@@ -483,7 +483,14 @@ export function SettingsPage({
               <Download size={18} />
             </span>
             <div className="setting-body">
-              <label>Mole Desktop v{info.version}</label>
+              <label>
+                Mole Desktop v{info.version}
+                {info.platform === "windows" && (
+                  <span className="badge badge-warn" title="Windows 版本仍在测试中">
+                    Beta
+                  </span>
+                )}
+              </label>
               <p className={`small ${updateError ? "" : "muted"}`}>{updateHint}</p>
               {installing && (
                 <div className="update-progress">
@@ -568,7 +575,10 @@ export function SettingsPage({
               <h3>Mole Desktop</h3>
               <p>跨平台清理、磁盘分析与系统监控工具</p>
             </div>
-            <span className="badge">v{info.version}</span>
+            <div className="about-badges">
+              {info.platform === "windows" && <span className="badge badge-warn">Beta</span>}
+              <span className="badge">v{info.version}</span>
+            </div>
           </div>
           <div className="about-grid">
             <div>

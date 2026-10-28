@@ -22,6 +22,7 @@ import {
   useToast,
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
+import { revealLabel, trashName, usePlatform } from "../platform";
 
 const KIND_LABEL: Record<string, string> = {
   cache: "缓存",
@@ -39,6 +40,8 @@ const EMPTY_LEFTOVERS: Leftover[] = [];
 
 export function Uninstall() {
   const toast = useToast();
+  const platform = usePlatform();
+  const trash = trashName(platform);
   const {
     data: appData,
     loading,
@@ -201,7 +204,11 @@ export function Uninstall() {
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜索应用、发布者或 Bundle ID"
+                  placeholder={
+                    platform === "windows"
+                      ? "搜索应用或发布者"
+                      : "搜索应用、发布者或 Bundle ID"
+                  }
                 />
               </div>
               <button
@@ -261,19 +268,22 @@ export function Uninstall() {
                   </div>
                 </div>
 
-                <div className="detail-actions">
-                  <Button
-                    size="sm"
-                    icon={<FolderSearch size={15} />}
-                    disabled={!active.path}
-                    onClick={() => active.path && api.reveal(active.path).catch(() => {})}
-                  >
-                    在文件夹中显示
-                  </Button>
-                  {active.uninstaller && (
-                    <span className="hint-inline">将启动应用自带的卸载程序</span>
-                  )}
-                </div>
+                {(active.path || active.uninstaller) && (
+                  <div className="detail-actions">
+                    {active.path && (
+                      <Button
+                        size="sm"
+                        icon={<FolderSearch size={15} />}
+                        onClick={() => api.reveal(active.path).catch(() => {})}
+                      >
+                        {revealLabel(platform)}
+                      </Button>
+                    )}
+                    {active.uninstaller && (
+                      <span className="hint-inline">将启动应用自带的卸载程序</span>
+                    )}
+                  </div>
+                )}
 
                 <div className="detail-section">
                   <div className="detail-section-head">
@@ -325,8 +335,8 @@ export function Uninstall() {
                   <Checkbox
                     checked={permanent}
                     onChange={setPermanent}
-                    label="永久删除（不放入废纸篓）"
-                    hint="默认移入废纸篓，可在系统里恢复。"
+                    label={`永久删除（不放入${trash}）`}
+                    hint={`默认移入${trash}，可在系统里恢复。`}
                   />
                   <div className="detail-foot-actions">
                     <span className="muted small">
@@ -336,6 +346,7 @@ export function Uninstall() {
                       variant="danger"
                       icon={<Trash2 size={16} />}
                       loading={running || checking}
+                      title={`卸载 ${active.name}`}
                       onClick={requestUninstall}
                     >
                       卸载 {active.name}

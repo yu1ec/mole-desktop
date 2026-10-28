@@ -22,6 +22,7 @@ import {
   useToast,
 } from "../components/ui";
 import { CleanDetailModal, clearCleanDetailCache } from "../components/CleanDetailModal";
+import { revealLabel, trashName, usePlatform } from "../platform";
 
 const EMPTY_TOOLS: ConfigTool[] = [];
 
@@ -101,6 +102,8 @@ function toolStatus(tool: ConfigTool) {
 
 export function Configs() {
   const toast = useToast();
+  const platform = usePlatform();
+  const trash = trashName(platform);
   const {
     data: toolData,
     loading,
@@ -177,7 +180,7 @@ export function Configs() {
       const data = await api.deleteConfigPaths([...selected]);
       setResult(data);
       toast(
-        `已移入废纸篓 ${data.files.toLocaleString()} 个文件，释放 ${formatBytes(data.freed)}`,
+        `已移入${trash} ${data.files.toLocaleString()} 个文件，释放 ${formatBytes(data.freed)}`,
         data.errors.length ? "info" : "success",
       );
       setSelected(new Set());
@@ -371,7 +374,7 @@ export function Configs() {
                           )}
                           <button
                             className="icon-btn"
-                            title="在 Finder 中显示"
+                            title={revealLabel(platform)}
                             onClick={() =>
                               api
                                 .reveal(path.path)
@@ -402,8 +405,8 @@ export function Configs() {
                     label="选择全部可删除位置"
                     hint={
                       protectedCount > 0
-                        ? `${protectedCount} 个受保护位置不会选中；清理时会移入系统废纸篓，可在废纸篓中恢复。`
-                        : "清理时会移入系统废纸篓，可在废纸篓中恢复。"
+                        ? `${protectedCount} 个受保护位置不会选中；清理时会移入系统${trash}，可在${trash}中恢复。`
+                        : `清理时会移入系统${trash}，可在${trash}中恢复。`
                     }
                   />
                   <div className="detail-foot-actions">
@@ -417,7 +420,7 @@ export function Configs() {
                       loading={running}
                       onClick={() => setConfirmOpen(true)}
                     >
-                      移入废纸篓
+                      移入{trash}
                     </Button>
                   </div>
                 </div>
@@ -431,14 +434,14 @@ export function Configs() {
         <Trash2 size={16} />
         <p>
           这些目录可能仍被正在使用的工具读取。清理前请关闭对应工具，确认<strong>无需保留登录状态与历史会话</strong>；
-          删除会移入废纸篓，而不是永久删除。
+          删除会移入{trash}，而不是永久删除。
         </p>
       </Card>
 
       <Modal
         open={confirmOpen}
         title={`清理 ${selected.size} 个配置位置？`}
-        description={`共 ${formatBytes(selectedSize)}，将移入系统废纸篓。清理后对应工具可能需要重新登录或重新配置。`}
+        description={`共 ${formatBytes(selectedSize)}，将移入系统${trash}。清理后对应工具可能需要重新登录或重新配置。`}
         tone="danger"
         onClose={() => setConfirmOpen(false)}
         footer={
@@ -447,7 +450,7 @@ export function Configs() {
               取消
             </Button>
             <Button variant="danger" loading={running} onClick={deleteSelected}>
-              确认移入废纸篓
+              确认移入{trash}
             </Button>
           </>
         }
@@ -503,7 +506,7 @@ export function Configs() {
           source={{
             key: `config:${detail.tool.id}`,
             title: `${detail.tool.name} 配置明细`,
-            description: "点击文件夹可以继续查看下一级内容；右侧按钮可单独删除，删除后会移入废纸篓。",
+            description: `点击文件夹可以继续查看下一级内容；右侧按钮可单独删除，删除后会移入${trash}。`,
             initialPath: detail.path,
             load: (path) => api.configDetail(detail.tool.id, path),
             remove: (path) => api.deleteConfigEntry(detail.tool.id, path),

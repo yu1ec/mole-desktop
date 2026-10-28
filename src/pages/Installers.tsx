@@ -14,11 +14,13 @@ import {
   useToast,
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
+import { trashName, usePlatform } from "../platform";
 
 const EMPTY_FILES: InstallerFile[] = [];
 
 export function Installers() {
   const toast = useToast();
+  const trash = trashName(usePlatform());
   const {
     data: fileData,
     loading,
@@ -182,7 +184,7 @@ export function Installers() {
           <Card className="clean-note">
             <Trash2 size={16} />
             <p>
-              安装包会被<strong>永久删除</strong>，不会进入废纸篓。删除前请确认对应软件已经安装完成，且不再需要离线安装。
+              安装包会被<strong>永久删除</strong>，不会进入{trash}。删除前请确认对应软件已经安装完成，且不再需要离线安装。
             </p>
           </Card>
         </>

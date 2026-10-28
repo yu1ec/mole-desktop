@@ -13,6 +13,7 @@ import { api } from "../api";
 import { formatBytes } from "../format";
 import type { CleanDetail, CleanEntry, EntryTrashResult } from "../types";
 import { Button, EmptyState, Modal, Spinner, useToast } from "./ui";
+import { revealLabel, trashName, usePlatform } from "../platform";
 
 // Browsing one directory level at a time keeps each request cheap; remembering
 // visited levels makes walking back and forth instant.
@@ -66,6 +67,8 @@ export function CleanDetailModal({
   onClose: () => void;
 }) {
   const toast = useToast();
+  const platform = usePlatform();
+  const trash = trashName(platform);
   const [path, setPath] = useState<string | null>(source.initialPath ?? null);
   const [detail, setDetail] = useState<CleanDetail | null>(null);
   const [removed, setRemoved] = useState<Record<string, RemovedEntry>>({});
@@ -125,7 +128,7 @@ export function CleanDetailModal({
           : current,
       );
       onChanged?.();
-      toast(result.restorable ? "已移入废纸篓，可随时恢复" : "已删除", "success");
+      toast(result.restorable ? `已移入${trash}，可随时恢复` : "已删除", "success");
     } catch (err) {
       toast(String(err), "error");
     } finally {
@@ -204,7 +207,7 @@ export function CleanDetailModal({
                 api.reveal(revealTarget).catch(() => toast("无法打开目录", "error"))
               }
             >
-              在 Finder 中显示
+              {revealLabel(platform)}
             </Button>
           )}
         </>
@@ -278,11 +281,11 @@ export function CleanDetailModal({
                         title={
                           deleted
                             ? record.restorable
-                              ? "已移入废纸篓"
+                              ? `已移入${trash}`
                               : "已删除"
                             : entry.isDir
                               ? `查看 ${entry.path}`
-                              : `在 Finder 中显示 ${entry.path}`
+                              : `${revealLabel(platform)} ${entry.path}`
                         }
                         onClick={() => {
                           if (deleted) return;
@@ -334,7 +337,7 @@ export function CleanDetailModal({
                             className="clean-detail-action"
                             disabled={busy !== null}
                             onClick={() => removeEntry(entry)}
-                            title="删除（移入废纸篓）"
+                            title={`删除（移入${trash}）`}
                             aria-label={`删除 ${entry.name}`}
                           >
                             {busyHere ? <Loader2 size={14} className="spin" /> : <Trash2 size={14} />}

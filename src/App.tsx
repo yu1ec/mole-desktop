@@ -5,6 +5,7 @@ import { Button, Modal, ToastProvider } from "./components/ui";
 import { MarkdownView } from "./components/MarkdownView";
 import { notesFor, type ReleaseNotes } from "./changelog";
 import { api } from "./api";
+import { PlatformProvider, detectPlatform } from "./platform";
 import type { PageKey, SystemSnapshot, UpdateCheckResult } from "./types";
 import { Dashboard } from "./pages/Dashboard";
 import { Clean } from "./pages/Clean";
@@ -26,6 +27,7 @@ export default function App() {
   const [update, setUpdate] = useState<UpdateCheckResult | null>(null);
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
   const [changelog, setChangelog] = useState<ReleaseNotes | null>(null);
+  const platform = snapshot?.platform ?? detectPlatform();
 
   const refreshSnapshot = useCallback(async () => {
     try {
@@ -96,78 +98,80 @@ export default function App() {
   }, []);
 
   return (
-    <ToastProvider>
-      <div className="app">
-        <Sidebar
-          page={page}
-          onNavigate={setPage}
-          snapshot={snapshot}
-          updateAvailable={Boolean(update?.updateAvailable)}
-        />
-        <main className="main">
-          {page !== "settings" &&
-            update?.updateAvailable &&
-            update.latestVersion !== dismissedVersion && (
-              <div className="update-banner-wrap">
-                <div className="update-banner" role="status">
-                  <span className="update-banner-icon">
-                    <Sparkles size={16} />
-                  </span>
-                  <div className="update-banner-copy">
-                    <strong>发现新版本 v{update.latestVersion}</strong>
-                    <span>当前版本 v{update.currentVersion}</span>
+    <PlatformProvider platform={platform}>
+      <ToastProvider>
+        <div className={`app platform-${platform}`}>
+          <Sidebar
+            page={page}
+            onNavigate={setPage}
+            snapshot={snapshot}
+            updateAvailable={Boolean(update?.updateAvailable)}
+          />
+          <main className="main">
+            {page !== "settings" &&
+              update?.updateAvailable &&
+              update.latestVersion !== dismissedVersion && (
+                <div className="update-banner-wrap">
+                  <div className="update-banner" role="status">
+                    <span className="update-banner-icon">
+                      <Sparkles size={16} />
+                    </span>
+                    <div className="update-banner-copy">
+                      <strong>发现新版本 v{update.latestVersion}</strong>
+                      <span>当前版本 v{update.currentVersion}</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      icon={<Download size={14} />}
+                      onClick={() => setPage("settings")}
+                    >
+                      立即更新
+                    </Button>
+                    <button
+                      className="update-banner-close"
+                      aria-label="稍后提醒"
+                      onClick={() => setDismissedVersion(update.latestVersion)}
+                    >
+                      <X size={15} />
+                    </button>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    icon={<Download size={14} />}
-                    onClick={() => setPage("settings")}
-                  >
-                    立即更新
-                  </Button>
-                  <button
-                    className="update-banner-close"
-                    aria-label="稍后提醒"
-                    onClick={() => setDismissedVersion(update.latestVersion)}
-                  >
-                    <X size={15} />
-                  </button>
                 </div>
-              </div>
+              )}
+            {page === "dashboard" && <Dashboard onNavigate={setPage} />}
+            {page === "clean" && <Clean />}
+            {page === "uninstall" && <Uninstall />}
+            {page === "configs" && <Configs />}
+            {page === "brew" && platform !== "windows" && <Homebrew />}
+            {page === "analyze" && <Analyze />}
+            {page === "optimize" && <Optimize />}
+            {page === "monitor" && <Monitor />}
+            {page === "projects" && <Projects />}
+            {page === "installers" && <Installers />}
+            {page === "history" && <HistoryPage />}
+            {page === "changelog" && <ChangelogPage />}
+            {page === "settings" && (
+              <SettingsPage initialUpdate={update} onNavigate={setPage} />
             )}
-          {page === "dashboard" && <Dashboard onNavigate={setPage} />}
-          {page === "clean" && <Clean />}
-          {page === "uninstall" && <Uninstall />}
-          {page === "configs" && <Configs />}
-          {page === "brew" && <Homebrew />}
-          {page === "analyze" && <Analyze />}
-          {page === "optimize" && <Optimize />}
-          {page === "monitor" && <Monitor />}
-          {page === "projects" && <Projects />}
-          {page === "installers" && <Installers />}
-          {page === "history" && <HistoryPage />}
-          {page === "changelog" && <ChangelogPage />}
-          {page === "settings" && (
-            <SettingsPage initialUpdate={update} onNavigate={setPage} />
-          )}
-        </main>
+          </main>
 
-        {changelog && (
-          <Modal
-            open
-            title={`变更记录 v${changelog.version}`}
-            description="更新已完成，来看看这次有哪些变化"
-            onClose={() => setChangelog(null)}
-            footer={
-              <Button variant="primary" onClick={() => setChangelog(null)}>
-                知道了
-              </Button>
-            }
-          >
-            <MarkdownView source={changelog.body} />
-          </Modal>
-        )}
-      </div>
-    </ToastProvider>
+          {changelog && (
+            <Modal
+              open
+              title={`变更记录 v${changelog.version}`}
+              description="更新已完成，来看看这次有哪些变化"
+              onClose={() => setChangelog(null)}
+              footer={
+                <Button variant="primary" onClick={() => setChangelog(null)}>
+                  知道了
+                </Button>
+              }
+            >
+              <MarkdownView source={changelog.body} />
+            </Modal>
+          )}
+        </div>
+      </ToastProvider>
+    </PlatformProvider>
   );
 }

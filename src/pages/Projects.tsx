@@ -15,12 +15,14 @@ import {
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
 import { CleanDetailModal, clearCleanDetailCache } from "../components/CleanDetailModal";
+import { trashName, usePlatform } from "../platform";
 
 const EMPTY_ARTIFACTS: ProjectArtifact[] = [];
 const EMPTY_ROOTS: string[] = [];
 
 export function Projects() {
   const toast = useToast();
+  const trash = trashName(usePlatform());
   const {
     data,
     loading,
@@ -242,7 +244,7 @@ export function Projects() {
           <Card className="clean-note">
             <Trash2 size={16} />
             <p>
-              构建产物会被<strong>永久删除</strong>，不进入废纸篓。它们通常可以重新生成，但删除后首次构建会变慢。
+              构建产物会被<strong>永久删除</strong>，不进入{trash}。它们通常可以重新生成，但删除后首次构建会变慢。
               最近 7 天修改过的产物默认不勾选。点击每项右侧的<strong>查看明细</strong>
               可逐层查看将被删除的目录与文件。
             </p>
@@ -253,7 +255,7 @@ export function Projects() {
       <Modal
         open={confirmOpen}
         title={`永久删除 ${selected.size} 个构建产物？`}
-        description={`将释放约 ${formatBytes(selectedSize)}，删除后无法从废纸篓恢复。`}
+        description={`将释放约 ${formatBytes(selectedSize)}，删除后无法从${trash}恢复。`}
         tone="danger"
         onClose={() => setConfirmOpen(false)}
         footer={
