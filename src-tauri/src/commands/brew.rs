@@ -60,7 +60,7 @@ fn brew_command(brew: &Path) -> Command {
     }
     let path = std::env::join_paths(dirs).unwrap_or_default();
 
-    let mut command = Command::new(brew);
+    let mut command = crate::util::command(brew);
     command
         .env("PATH", path)
         .env("HOMEBREW_NO_AUTO_UPDATE", "1")

@@ -170,7 +170,11 @@ fn battery_cached(state: &AppState) -> Option<BatteryInfo> {
 fn read_battery() -> Option<BatteryInfo> {
     #[cfg(target_os = "macos")]
     {
-        let output = std::process::Command::new("pmset").arg("-g").arg("batt").output().ok()?;
+        let output = crate::util::command("pmset")
+            .arg("-g")
+            .arg("batt")
+            .output()
+            .ok()?;
         let text = String::from_utf8_lossy(&output.stdout);
         for line in text.lines() {
             if !line.contains('%') {
@@ -198,7 +202,7 @@ fn read_battery() -> Option<BatteryInfo> {
     }
     #[cfg(windows)]
     {
-        let output = std::process::Command::new("powershell")
+        let output = crate::util::command("powershell")
             .args([
                 "-NoProfile",
                 "-Command",

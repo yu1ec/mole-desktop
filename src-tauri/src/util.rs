@@ -9,6 +9,23 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use rayon::prelude::*;
 use walkdir::WalkDir;
 
+/// Creates a command that never opens a console window on Windows.
+///
+/// The app itself is a GUI binary, so any console child (`powershell`, `cmd`,
+/// `ipconfig`, `DISM`, ...) would otherwise get a fresh, visible console.
+/// `CREATE_NO_WINDOW` suppresses it and is ignored by GUI children.
+pub fn command<S: AsRef<std::ffi::OsStr>>(program: S) -> Command {
+    #[allow(unused_mut)]
+    let mut command = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
 pub fn home() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
 }
@@ -371,11 +388,11 @@ fn space_for(path: &Path) -> Option<(u64, u64)> {
 
 pub fn os_open(path: &Path) -> Result<(), String> {
     let result = if cfg!(target_os = "macos") {
-        Command::new("open").arg(path).spawn()
+        command("open").arg(path).spawn()
     } else if cfg!(windows) {
-        Command::new("explorer").arg(path).spawn()
+        command("explorer").arg(path).spawn()
     } else {
-        Command::new("xdg-open").arg(path).spawn()
+        command("xdg-open").arg(path).spawn()
     };
     result.map(|_| ()).map_err(|err| err.to_string())
 }
@@ -473,7 +490,7 @@ pub fn is_elevated() -> bool {
 #[cfg(not(windows))]
 fn libc_geteuid() -> u32 {
     // Avoid a libc dependency for a single call.
-    let uid = Command::new("id").arg("-u").output();
+    let uid = command("id").arg("-u").output();
     uid.ok()
         .and_then(|out| String::from_utf8(out.stdout).ok())
         .and_then(|s| s.trim().parse::<u32>().ok())
@@ -481,7 +498,7 @@ fn libc_geteuid() -> u32 {
 }
 
 pub fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
-    let output = Command::new(program)
+    let output = command(program)
         .args(args)
         .output()
         .map_err(|err| format!("{program}: {err}"))?;

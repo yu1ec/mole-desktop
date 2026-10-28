@@ -552,7 +552,7 @@ mod macos {
             "tell application id \"{}\" to quit",
             bundle.replace('"', "")
         );
-        let _ = std::process::Command::new("osascript")
+        let _ = crate::util::command("osascript")
             .arg("-e")
             .arg(script)
             .output();
@@ -751,7 +751,7 @@ mod windows {
         if quit_process && !app.location.is_empty() {
             terminate_processes(&running_pids(Path::new(&app.location)));
         }
-        std::process::Command::new("cmd")
+        crate::util::command("cmd")
             .args(["/C", &command])
             .spawn()
             .map_err(|err| format!("无法启动卸载程序：{err}"))?;

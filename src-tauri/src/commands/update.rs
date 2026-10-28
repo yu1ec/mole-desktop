@@ -249,7 +249,7 @@ fn http_client(timeout: Duration) -> reqwest::Client {
 fn launch_installer(path: &Path) -> anyhow::Result<()> {
     #[cfg(target_os = "macos")]
     {
-        std::process::Command::new("open")
+        crate::util::command("open")
             .arg(path)
             .spawn()
             .context("opening DMG installer")?;
@@ -259,11 +259,11 @@ fn launch_installer(path: &Path) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
         let spawned = if path.extension().and_then(|ext| ext.to_str()) == Some("msi") {
-            std::process::Command::new("msiexec")
+            crate::util::command("msiexec")
                 .args(["/i", path.to_str().unwrap_or("")])
                 .spawn()
         } else {
-            std::process::Command::new(path).spawn()
+            crate::util::command(path).spawn()
         };
         spawned.context("launching Windows installer")?;
         return Ok(());
@@ -275,7 +275,7 @@ fn launch_installer(path: &Path) -> anyhow::Result<()> {
         let mut perms = std::fs::metadata(path)?.permissions();
         perms.set_mode(0o755);
         std::fs::set_permissions(path, perms)?;
-        std::process::Command::new(path)
+        crate::util::command(path)
             .spawn()
             .context("launching AppImage")?;
         return Ok(());
