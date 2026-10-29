@@ -21,13 +21,31 @@ import { HistoryPage } from "./pages/History";
 import { ChangelogPage } from "./pages/Changelog";
 import { SettingsPage } from "./pages/Settings";
 
+const SKIP_UPDATE_KEY = "mole.update.skipped-version";
+
+function readSkippedVersion(): string | null {
+  try {
+    return localStorage.getItem(SKIP_UPDATE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export default function App() {
   const [page, setPage] = useState<PageKey>("dashboard");
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);
   const [update, setUpdate] = useState<UpdateCheckResult | null>(null);
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
+  // 用户选择「本次不更新」的版本会记住，只有出现更新的版本时才再次提醒。
+  const [skippedVersion, setSkippedVersion] = useState<string | null>(readSkippedVersion);
+  const [installRequest, setInstallRequest] = useState<{ version: string; token: number } | null>(
+    null,
+  );
   const [changelog, setChangelog] = useState<ReleaseNotes | null>(null);
   const platform = snapshot?.platform ?? detectPlatform();
+  const updateAvailable = Boolean(
+    update?.updateAvailable && update.latestVersion !== skippedVersion,
+  );
 
   const refreshSnapshot = useCallback(async () => {
     try {
@@ -97,6 +115,25 @@ export default function App() {
     return () => document.removeEventListener("keydown", blockSelectAll);
   }, []);
 
+  // 点击通知里的「立即更新」：跳到设置页的更新区域并自动开始下载安装。
+  const startUpdate = () => {
+    if (!update?.latestVersion) return;
+    setInstallRequest({ version: update.latestVersion, token: Date.now() });
+    setPage("settings");
+  };
+
+  const skipVersion = (version: string | null) => {
+    if (!version) return;
+    setSkippedVersion(version);
+    try {
+      localStorage.setItem(SKIP_UPDATE_KEY, version);
+    } catch {
+      // 存储不可用时只在本次运行内生效。
+    }
+  };
+
+  const clearInstallRequest = useCallback(() => setInstallRequest(null), []);
+
   return (
     <PlatformProvider platform={platform}>
       <ToastProvider>
@@ -105,33 +142,40 @@ export default function App() {
             page={page}
             onNavigate={setPage}
             snapshot={snapshot}
-            updateAvailable={Boolean(update?.updateAvailable)}
+            updateAvailable={updateAvailable}
           />
           <main className="main">
             {page !== "settings" &&
-              update?.updateAvailable &&
-              update.latestVersion !== dismissedVersion && (
+              updateAvailable &&
+              update?.latestVersion !== dismissedVersion && (
                 <div className="update-banner-wrap">
                   <div className="update-banner" role="status">
                     <span className="update-banner-icon">
                       <Sparkles size={16} />
                     </span>
                     <div className="update-banner-copy">
-                      <strong>发现新版本 v{update.latestVersion}</strong>
-                      <span>当前版本 v{update.currentVersion}</span>
+                      <strong>发现新版本 v{update?.latestVersion}</strong>
+                      <span>当前版本 v{update?.currentVersion}</span>
                     </div>
                     <Button
                       size="sm"
                       variant="primary"
                       icon={<Download size={14} />}
-                      onClick={() => setPage("settings")}
+                      onClick={startUpdate}
                     >
                       立即更新
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="quiet"
+                      onClick={() => skipVersion(update?.latestVersion ?? null)}
+                    >
+                      本次不更新
                     </Button>
                     <button
                       className="update-banner-close"
                       aria-label="稍后提醒"
-                      onClick={() => setDismissedVersion(update.latestVersion)}
+                      onClick={() => setDismissedVersion(update?.latestVersion ?? null)}
                     >
                       <X size={15} />
                     </button>
@@ -151,7 +195,12 @@ export default function App() {
             {page === "history" && <HistoryPage />}
             {page === "changelog" && <ChangelogPage />}
             {page === "settings" && (
-              <SettingsPage initialUpdate={update} onNavigate={setPage} />
+              <SettingsPage
+                initialUpdate={update}
+                installRequest={installRequest}
+                onInstallRequestHandled={clearInstallRequest}
+                onNavigate={setPage}
+              />
             )}
           </main>
 

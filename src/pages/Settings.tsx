@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   Download,
@@ -52,9 +52,13 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
 
 export function SettingsPage({
   initialUpdate = null,
+  installRequest = null,
+  onInstallRequestHandled,
   onNavigate,
 }: {
   initialUpdate?: UpdateCheckResult | null;
+  installRequest?: { version: string; token: number } | null;
+  onInstallRequestHandled?: () => void;
   onNavigate?: (page: PageKey) => void;
 }) {
   const toast = useToast();
@@ -73,6 +77,8 @@ export function SettingsPage({
   const [permission, setPermission] = useState<DiskPermissionStatus | null>(null);
   const [probing, setProbing] = useState(false);
   const [checkingPermission, setCheckingPermission] = useState(false);
+  const updateSectionRef = useRef<HTMLElement | null>(null);
+  const handledInstallToken = useRef<number | null>(null);
   const {
     open: restartPromptOpen,
     close: closeRestartPrompt,
@@ -243,6 +249,16 @@ export function SettingsPage({
       setProgress(null);
     }
   };
+
+  // 从通知条点击「立即更新」后，滚动到更新区域并自动开始下载安装。
+  useEffect(() => {
+    if (!installRequest || handledInstallToken.current === installRequest.token) return;
+    if (loading || !settings || !update?.updateAvailable) return;
+    handledInstallToken.current = installRequest.token;
+    updateSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    void installUpdate();
+    onInstallRequestHandled?.();
+  }, [installRequest, loading, settings, update, installUpdate, onInstallRequestHandled]);
 
   if (loading || !settings || !info) return <Spinner label="正在读取设置…" />;
 
@@ -475,7 +491,7 @@ export function SettingsPage({
         </Card>
       </section>
 
-      <section>
+      <section ref={updateSectionRef} className="settings-update-section">
         <SectionTitle title="应用更新" hint="从 GitHub Releases 检查新版本，支持国内镜像加速下载" />
         <Card className="settings-card">
           <div className="setting-row">

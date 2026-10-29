@@ -538,6 +538,11 @@ nav {
   color: var(--text);
 }
 
+/* 从通知条跳转过来时，留出顶部通知条的高度。 */
+.settings-update-section {
+  scroll-margin-top: 72px;
+}
+
 @keyframes fadeUp {
   from {
     opacity: 0;
