@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use rayon::prelude::*;
 
 use crate::models::{AnalyzeEntry, AnalyzeFile, AnalyzeReport};
-use crate::util::{dir_stats, dir_usage, expand_tilde, free_space};
+use crate::util::{allocated_size, dir_stats, dir_usage, expand_tilde, free_space};
 
 #[tauri::command(async)]
 pub fn analyze_dir(path: String) -> Result<AnalyzeReport, String> {
@@ -104,7 +104,7 @@ pub fn analyze_dir(path: String) -> Result<AnalyzeReport, String> {
             Some(AnalyzeFile {
                 name: path.file_name()?.to_string_lossy().to_string(),
                 path: path.to_string_lossy().to_string(),
-                size: meta.len(),
+                size: allocated_size(&meta),
             })
         })
         .collect();

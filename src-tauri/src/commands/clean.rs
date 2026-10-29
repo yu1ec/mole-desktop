@@ -9,7 +9,8 @@ use crate::rules;
 use crate::state::AppState;
 use crate::store::push_history;
 use crate::util::{
-    deny_reason, expand_tilde, free_space, home, now_rfc3339, os_open, remove_path, trash_entry,
+    allocated_size, deny_reason, expand_tilde, free_space, home, now_rfc3339, os_open, remove_path,
+    trash_entry,
 };
 
 #[tauri::command(async)]
@@ -159,7 +160,7 @@ pub fn list_installers() -> Vec<InstallerFile> {
             files.push(InstallerFile {
                 path: entry.path().to_string_lossy().to_string(),
                 name: entry.file_name().to_string_lossy().to_string(),
-                size: meta.len(),
+                size: allocated_size(&meta),
                 modified: crate::util::mtime(entry.path()),
                 source: source.clone(),
             });

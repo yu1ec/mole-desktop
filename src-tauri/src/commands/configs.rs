@@ -13,7 +13,7 @@ use crate::models::{
 use crate::rules::display_path;
 use crate::state::AppState;
 use crate::store::push_history;
-use crate::util::{expand_tilde, home, move_to_trash, now_rfc3339, trash_entry};
+use crate::util::{allocated_size, expand_tilde, home, move_to_trash, now_rfc3339, trash_entry};
 
 struct ConfigPathSpec {
     path: PathBuf,
@@ -1087,7 +1087,7 @@ fn path_stats(path: &Path) -> (u64, u64, i64) {
         .map(|duration| duration.as_secs() as i64)
         .unwrap_or(0);
     if !meta.is_dir() {
-        return (meta.len(), 1, root_modified);
+        return (allocated_size(&meta), 1, root_modified);
     }
 
     let mut size = 0u64;
@@ -1105,7 +1105,7 @@ fn path_stats(path: &Path) -> (u64, u64, i64) {
             continue;
         }
         if let Ok(meta) = entry.metadata() {
-            size = size.saturating_add(meta.len());
+            size = size.saturating_add(allocated_size(&meta));
             files += 1;
             if let Ok(time) = meta.modified() {
                 if let Ok(duration) = time.duration_since(std::time::UNIX_EPOCH) {

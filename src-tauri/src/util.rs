@@ -72,12 +72,32 @@ pub fn pattern_root(pattern: &Path) -> PathBuf {
     }
 }
 
+/// Bytes a file actually occupies on disk.
+///
+/// `Metadata::len` is the logical size. On APFS and other filesystems a file
+/// can reserve far fewer blocks than its length (sparse disk images, clones,
+/// transparent compression), which made totals exceed the physical capacity of
+/// the volume. `du` and Finder report the allocated blocks, so match them.
+pub fn allocated_size(meta: &fs::Metadata) -> u64 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        meta.blocks().saturating_mul(512)
+    }
+    #[cfg(not(unix))]
+    {
+        // Windows exposes allocation through `GetCompressedFileSize`, which
+        // `std` does not wrap; the logical length is the best portable value.
+        meta.len()
+    }
+}
+
 pub fn dir_stats(path: &Path) -> (u64, u64) {
     let Ok(meta) = fs::symlink_metadata(path) else {
         return (0, 0);
     };
     if !meta.is_dir() {
-        return (meta.len(), 1);
+        return (allocated_size(&meta), 1);
     }
     let mut size = 0u64;
     let mut files = 0u64;
@@ -91,7 +111,7 @@ pub fn dir_stats(path: &Path) -> (u64, u64) {
         }
         if entry.file_type().is_file() {
             if let Ok(meta) = entry.metadata() {
-                size = size.saturating_add(meta.len());
+                size = size.saturating_add(allocated_size(&meta));
                 files += 1;
             }
         }
@@ -111,7 +131,7 @@ pub fn dir_children(path: &Path) -> (u64, u64, Vec<(PathBuf, bool, u64, u64)>, u
         return (0, 0, Vec::new(), 1);
     };
     if !meta.is_dir() {
-        return (meta.len(), 1, Vec::new(), 0);
+        return (allocated_size(&meta), 1, Vec::new(), 0);
     }
     let Ok(iter) = fs::read_dir(path) else {
         return (0, 0, Vec::new(), 1);
@@ -144,7 +164,7 @@ pub fn dir_children(path: &Path) -> (u64, u64, Vec<(PathBuf, bool, u64, u64)>, u
                 let (size, files) = dir_stats(&child);
                 Some((child, true, size, files))
             } else if file_type.is_file() {
-                let size = entry.metadata().map(|meta| meta.len()).unwrap_or(0);
+                let size = entry.metadata().map(|meta| allocated_size(&meta)).unwrap_or(0);
                 Some((child, false, size, 1))
             } else {
                 None
@@ -167,7 +187,7 @@ pub fn dir_usage(path: &Path) -> (u64, u64, Vec<(PathBuf, u64, u64)>) {
         return (0, 0, Vec::new());
     };
     if !meta.is_dir() {
-        return (meta.len(), 1, Vec::new());
+        return (allocated_size(&meta), 1, Vec::new());
     }
 
     // Children are visited before their parent, so a directory's size is
@@ -190,7 +210,7 @@ pub fn dir_usage(path: &Path) -> (u64, u64, Vec<(PathBuf, u64, u64)>) {
         if entry.file_type().is_file() {
             if let Ok(meta) = entry.metadata() {
                 let slot = pending.entry(parent.to_path_buf()).or_insert((0, 0));
-                slot.0 = slot.0.saturating_add(meta.len());
+                slot.0 = slot.0.saturating_add(allocated_size(&meta));
                 slot.1 += 1;
             }
         } else if entry.file_type().is_dir() {
@@ -243,7 +263,7 @@ fn remove_inner(path: &Path, freed: &mut u64, files: &mut u64, errors: &mut Vec<
             errors.push(format!("无法删除 {}：{err}", path.display()));
         }
     } else {
-        *freed = freed.saturating_add(meta.len());
+        *freed = freed.saturating_add(allocated_size(&meta));
         if fs::remove_file(path).is_ok() {
             *files += 1;
         } else {
@@ -516,5 +536,28 @@ pub fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
         Ok(text)
     } else {
         Err(text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn allocated_size_ignores_sparse_holes() {
+        let path = std::env::temp_dir().join(format!("mole-sparse-{}", std::process::id()));
+        let file = fs::File::create(&path).expect("create sparse file");
+        file.set_len(64 * 1024 * 1024).expect("extend file");
+        drop(file);
+
+        let meta = fs::metadata(&path).expect("stat sparse file");
+        assert_eq!(meta.len(), 64 * 1024 * 1024);
+        assert!(
+            allocated_size(&meta) < meta.len(),
+            "sparse file should occupy fewer bytes than its logical length"
+        );
+
+        let _ = fs::remove_file(&path);
     }
 }

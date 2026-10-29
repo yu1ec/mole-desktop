@@ -6,8 +6,8 @@ use rayon::prelude::*;
 
 use crate::models::{CleanCrumb, CleanDetail, CleanEntry, CleanItem, OperationResult};
 use crate::util::{
-    clear_dir_contents, deny_reason, dir_children, expand_pattern, expand_tilde, home,
-    pattern_root, remove_path, unique_paths,
+    allocated_size, clear_dir_contents, deny_reason, dir_children, expand_pattern, expand_tilde,
+    home, pattern_root, remove_path, unique_paths,
 };
 
 pub struct Rule {
@@ -415,9 +415,10 @@ fn build_overview(rule: &Rule, roots: &[PathBuf]) -> CleanDetail {
         // Some Windows patterns resolve to files directly (e.g. thumbcache_*.db).
         if let Ok(meta) = std::fs::symlink_metadata(root) {
             if meta.is_file() {
-                total_size = total_size.saturating_add(meta.len());
+                let size = allocated_size(&meta);
+                total_size = total_size.saturating_add(size);
                 file_count += 1;
-                entries.push(detail_entry(root, false, meta.len(), 1));
+                entries.push(detail_entry(root, false, size, 1));
                 continue;
             }
         }
