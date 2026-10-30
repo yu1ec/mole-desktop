@@ -92,6 +92,27 @@ pub fn allocated_size(meta: &fs::Metadata) -> u64 {
     }
 }
 
+/// Whether a walk should step over a duplicate mount of the data volume.
+///
+/// macOS mounts the data volume at `/System/Volumes/Data` and also exposes the
+/// same files at the root through firmlinks (`/Users`, `/Applications`, ...).
+/// Walking `/` reaches both copies, so every user file was counted twice and
+/// totals could exceed the physical capacity of the disk. Skip the mount point
+/// unless the walk actually starts inside `/System/Volumes`.
+fn is_duplicate_volume(path: &Path, root: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        const DATA_VOLUME: &str = "/System/Volumes/Data";
+        const VOLUMES: &str = "/System/Volumes";
+        path.starts_with(DATA_VOLUME) && !root.starts_with(VOLUMES)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (path, root);
+        false
+    }
+}
+
 pub fn dir_stats(path: &Path) -> (u64, u64) {
     let Ok(meta) = fs::symlink_metadata(path) else {
         return (0, 0);
@@ -104,6 +125,7 @@ pub fn dir_stats(path: &Path) -> (u64, u64) {
     for entry in WalkDir::new(path)
         .follow_links(false)
         .into_iter()
+        .filter_entry(|entry| !is_duplicate_volume(entry.path(), path))
         .filter_map(Result::ok)
     {
         if entry.depth() == 0 {
@@ -198,6 +220,7 @@ pub fn dir_usage(path: &Path) -> (u64, u64, Vec<(PathBuf, u64, u64)>) {
         .follow_links(false)
         .contents_first(true)
         .into_iter()
+        .filter_entry(|entry| !is_duplicate_volume(entry.path(), path))
         .filter_map(Result::ok)
     {
         if entry.depth() == 0 {
@@ -559,5 +582,16 @@ mod tests {
         );
 
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn data_volume_only_skipped_from_outside() {
+        let data = Path::new("/System/Volumes/Data/Users");
+        let expected = cfg!(target_os = "macos");
+        assert_eq!(is_duplicate_volume(data, Path::new("/")), expected);
+        assert_eq!(is_duplicate_volume(data, Path::new("/System")), expected);
+        assert!(!is_duplicate_volume(data, Path::new("/System/Volumes")));
+        assert!(!is_duplicate_volume(data, Path::new("/System/Volumes/Data")));
+        assert!(!is_duplicate_volume(Path::new("/Users"), Path::new("/")));
     }
 }
