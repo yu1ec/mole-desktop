@@ -14,12 +14,14 @@ import {
   useToast,
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
+import { usePathMenu } from "../components/ContextMenu";
 import { trashName, usePlatform } from "../platform";
 
 const EMPTY_FILES: InstallerFile[] = [];
 
 export function Installers() {
   const toast = useToast();
+  const pathMenu = usePathMenu();
   const trash = trashName(usePlatform());
   const {
     data: fileData,
@@ -145,7 +147,11 @@ export function Installers() {
               <span>{files.length} 个文件</span>
             </div>
             {files.map((file) => (
-              <div className="installer-row" key={file.path}>
+              <div
+                className="installer-row"
+                key={file.path}
+                onContextMenu={(event) => pathMenu(event, file.path, { isDir: false })}
+              >
                 <Checkbox
                   checked={selected.has(file.path)}
                   onChange={(value) =>

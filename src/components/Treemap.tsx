@@ -77,9 +77,11 @@ function layout(entries: AnalyzeEntry[], rect: Rect, offset = 0, out: Cell[] = [
 export function Treemap({
   entries,
   onOpen,
+  onContextMenu,
 }: {
   entries: AnalyzeEntry[];
   onOpen: (entry: AnalyzeEntry) => void;
+  onContextMenu?: (event: React.MouseEvent, entry: AnalyzeEntry) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(720);
@@ -110,6 +112,7 @@ export function Treemap({
             <g
               key={cell.entry.path}
               onClick={() => cell.entry.isDir && onOpen(cell.entry)}
+              onContextMenu={(event) => onContextMenu?.(event, cell.entry)}
               onMouseEnter={() => setHover(cell)}
               onMouseLeave={() => setHover(null)}
               className={cell.entry.isDir ? "treemap-cell is-dir" : "treemap-cell"}

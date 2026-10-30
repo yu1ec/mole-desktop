@@ -440,6 +440,31 @@ pub fn os_open(path: &Path) -> Result<(), String> {
     result.map(|_| ()).map_err(|err| err.to_string())
 }
 
+/// Opens the platform file manager focused on `path` instead of opening the
+/// path itself: Finder selects the item, Explorer highlights it.
+pub fn reveal_in_file_manager(path: &Path) -> Result<(), String> {
+    if !path.exists() {
+        return Err(format!("路径不存在：{}", path.display()));
+    }
+    #[cfg(target_os = "macos")]
+    let result = command("open").arg("-R").arg(path).spawn();
+    #[cfg(windows)]
+    let result = command("explorer")
+        .arg(format!("/select,{}", path.display()))
+        .spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let result = {
+        // Linux file managers have no portable "select this item" flag.
+        let target = if path.is_dir() {
+            path
+        } else {
+            path.parent().unwrap_or(path)
+        };
+        command("xdg-open").arg(target).spawn()
+    };
+    result.map(|_| ()).map_err(|err| err.to_string())
+}
+
 pub fn now_ts() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

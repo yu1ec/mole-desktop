@@ -22,10 +22,12 @@ import {
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
 import { CleanDetailModal, clearCleanDetailCache } from "../components/CleanDetailModal";
+import { usePathMenu } from "../components/ContextMenu";
 import { trashName, usePlatform } from "../platform";
 
 export function Clean() {
   const toast = useToast();
+  const pathMenu = usePathMenu();
   const trash = trashName(usePlatform());
   const {
     data: scan,
@@ -214,6 +216,7 @@ export function Clean() {
                           disabled={disabled}
                           onChange={(checked) => toggle(item.id, checked)}
                           className="clean-item"
+                          onContextMenu={(event) => pathMenu(event, item.paths)}
                           label={
                             <span className="clean-label">
                               <span>{item.label}</span>

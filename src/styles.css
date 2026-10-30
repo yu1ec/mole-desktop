@@ -500,9 +500,16 @@ nav {
 
 .update-banner-copy {
   display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.update-banner-line {
+  display: flex;
   align-items: baseline;
   gap: 10px;
-  flex: 1;
   min-width: 0;
 }
 
@@ -512,10 +519,45 @@ nav {
   white-space: nowrap;
 }
 
-.update-banner-copy span {
+.update-banner-line span {
   font-size: 11.5px;
   color: var(--muted);
   white-space: nowrap;
+}
+
+.update-banner-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.update-banner-progress .progress {
+  flex: 1;
+  min-width: 0;
+}
+
+.update-banner-meta {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.update-banner-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.update-banner-error span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  color: var(--danger, #e5484d);
 }
 
 .update-banner-close {
@@ -536,11 +578,6 @@ nav {
 .update-banner-close:hover {
   background: var(--panel-2);
   color: var(--text);
-}
-
-/* 从通知条跳转过来时，留出顶部通知条的高度。 */
-.settings-update-section {
-  scroll-margin-top: 72px;
 }
 
 @keyframes fadeUp {
@@ -3756,6 +3793,92 @@ section {
 
 .permission-folder .badge {
   flex: none;
+}
+
+/* ------------------------------ context menu ----------------------------- */
+
+.context-menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 190px;
+  max-width: 420px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--modal-bg);
+  box-shadow: var(--shadow);
+  animation: contextMenuIn 0.1s ease both;
+}
+
+@keyframes contextMenuIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu-item:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.context-menu-item:disabled {
+  color: var(--dim);
+  cursor: default;
+}
+
+.context-menu-item.is-danger {
+  color: var(--danger);
+}
+
+.context-menu-item.is-danger:hover:not(:disabled) {
+  background: rgba(255, 123, 114, 0.12);
+  color: var(--danger);
+}
+
+.context-menu-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--muted);
+}
+
+.context-menu-item:hover:not(:disabled) .context-menu-icon {
+  color: inherit;
+}
+
+.context-menu-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-menu-separator {
+  height: 1px;
+  margin: 4px 7px;
+  background: var(--border-soft);
+}
+
+.context-menu-label {
+  padding: 5px 10px 4px;
+  color: var(--dim);
+  font-size: 11px;
 }
 
 /* ---------------------------------- toast -------------------------------- */

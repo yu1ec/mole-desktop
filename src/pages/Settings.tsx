@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useEffect, useState } from "react";
 import {
   Download,
   ExternalLink,
@@ -27,7 +26,6 @@ import type {
   Settings,
   ThemeMode,
   UpdateCheckResult,
-  UpdateDownloadProgress,
 } from "../types";
 import {
   Button,
@@ -39,7 +37,10 @@ import {
   useToast,
 } from "../components/ui";
 import { PermissionRestartModal, usePermissionRestart } from "../components/permissionRestart";
+import { usePathMenu } from "../components/ContextMenu";
+import { revealLabel, usePlatform } from "../platform";
 import { useTheme } from "../theme";
+import { useUpdateInstaller } from "../update";
 import { formatBytes, formatSpeed } from "../format";
 
 const RELEASES_URL = "https://github.com/yu1ec/mole-desktop/releases/latest";
@@ -52,16 +53,14 @@ const THEME_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
 
 export function SettingsPage({
   initialUpdate = null,
-  installRequest = null,
-  onInstallRequestHandled,
   onNavigate,
 }: {
   initialUpdate?: UpdateCheckResult | null;
-  installRequest?: { version: string; token: number } | null;
-  onInstallRequestHandled?: () => void;
   onNavigate?: (page: PageKey) => void;
 }) {
   const toast = useToast();
+  const pathMenu = usePathMenu();
+  const platform = usePlatform();
   const { mode: themeMode, setMode: setThemeMode } = useTheme();
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -70,15 +69,17 @@ export function SettingsPage({
   const [saving, setSaving] = useState(false);
   const [update, setUpdate] = useState<UpdateCheckResult | null>(initialUpdate);
   const [checking, setChecking] = useState(false);
-  const [installing, setInstalling] = useState(false);
-  const [progress, setProgress] = useState<UpdateDownloadProgress | null>(null);
-  const [installPhase, setInstallPhase] = useState<"downloading" | "installing" | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const {
+    installing,
+    phase: installPhase,
+    progress,
+    error: installError,
+    install: installPackage,
+  } = useUpdateInstaller();
   const [permission, setPermission] = useState<DiskPermissionStatus | null>(null);
   const [probing, setProbing] = useState(false);
   const [checkingPermission, setCheckingPermission] = useState(false);
-  const updateSectionRef = useRef<HTMLElement | null>(null);
-  const handledInstallToken = useRef<number | null>(null);
   const {
     open: restartPromptOpen,
     close: closeRestartPrompt,
@@ -216,54 +217,28 @@ export function SettingsPage({
 
   const installUpdate = async () => {
     if (!settings) return;
-    setInstalling(true);
-    setProgress(null);
-    setInstallPhase("downloading");
     setUpdateError(null);
-    let unlisten: (() => void) | undefined;
-    let unlistenInstalling: (() => void) | undefined;
-    try {
-      unlisten = await listen<UpdateDownloadProgress>("update-download-progress", (event) => {
-        setProgress(event.payload);
-      });
-      unlistenInstalling = await listen("update-installing", () => {
-        setInstallPhase("installing");
-      });
-      const result = await api.downloadAndInstallUpdate(settings.accelerateDownload);
-      if (result.mode === "installer") {
-        toast(
-          info?.platform === "macos"
-            ? "自动安装未完成，已打开安装包，请拖入「应用程序」完成更新"
-            : "安装程序已启动，请按提示完成更新",
-          "info",
-        );
-      }
-    } catch (err) {
-      setUpdateError(String(err));
+    const outcome = await installPackage(settings.accelerateDownload);
+    if (!outcome) return;
+    if (!outcome.ok) {
       toast("更新失败，可尝试手动下载安装包", "error");
-    } finally {
-      unlisten?.();
-      unlistenInstalling?.();
-      setInstalling(false);
-      setInstallPhase(null);
-      setProgress(null);
+      return;
+    }
+    if (outcome.result.mode === "installer") {
+      toast(
+        info?.platform === "macos"
+          ? "自动安装未完成，已打开安装包，请拖入「应用程序」完成更新"
+          : "安装程序已启动，请按提示完成更新",
+        "info",
+      );
     }
   };
 
-  // 从通知条点击「立即更新」后，滚动到更新区域并自动开始下载安装。
-  useEffect(() => {
-    if (!installRequest || handledInstallToken.current === installRequest.token) return;
-    if (loading || !settings || !update?.updateAvailable) return;
-    handledInstallToken.current = installRequest.token;
-    updateSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    void installUpdate();
-    onInstallRequestHandled?.();
-  }, [installRequest, loading, settings, update, installUpdate, onInstallRequestHandled]);
-
   if (loading || !settings || !info) return <Spinner label="正在读取设置…" />;
 
-  const updateHint = updateError
-    ? updateError
+  const displayError = updateError ?? installError;
+  const updateHint = displayError
+    ? displayError
     : update?.updateAvailable && update.latestVersion
       ? `发现新版本 v${update.latestVersion}，当前 v${update.currentVersion}`
       : update
@@ -383,7 +358,16 @@ export function SettingsPage({
                     请为对应程序授权，或使用打包后的 .app 验证。
                   </p>
                 )}
-                <div className="path-box" title={permission.appPath}>
+                <div
+                  className="path-box"
+                  title={permission.appPath}
+                  onContextMenu={(event) =>
+                    pathMenu(event, permission.appPath, {
+                      isDir: permission.bundled,
+                      canOpen: permission.bundled,
+                    })
+                  }
+                >
                   {permission.appPath}
                 </div>
                 <div className="permission-folders">
@@ -392,7 +376,14 @@ export function SettingsPage({
                     .map((folder) => (
                       <div className="permission-folder" key={folder.key}>
                         <strong>{folder.label}</strong>
-                        <code title={folder.path}>{folder.path}</code>
+                        <code
+                          title={folder.path}
+                          onContextMenu={(event) =>
+                            pathMenu(event, folder.path, { isDir: true })
+                          }
+                        >
+                          {folder.path}
+                        </code>
                         <span
                           className={`badge ${
                             folder.granted === true
@@ -446,7 +437,7 @@ export function SettingsPage({
                   icon={<ExternalLink size={14} />}
                   onClick={() => api.revealApp().catch((err) => toast(String(err), "error"))}
                 >
-                  在 Finder 中显示
+                  {revealLabel(platform)}
                 </Button>
                 <Button
                   size="sm"
@@ -482,7 +473,12 @@ export function SettingsPage({
             <div className="setting-body">
               <label>本地数据目录</label>
               <p className="small muted">操作历史与设置保存在这里，不会上传到任何服务器。</p>
-              <div className="path-box">{info.dataDir}</div>
+              <div
+                className="path-box"
+                onContextMenu={(event) => pathMenu(event, info.dataDir, { isDir: true })}
+              >
+                {info.dataDir}
+              </div>
             </div>
             <Button size="sm" onClick={() => api.openDataDir().catch(() => {})}>
               打开目录
@@ -491,7 +487,7 @@ export function SettingsPage({
         </Card>
       </section>
 
-      <section ref={updateSectionRef} className="settings-update-section">
+      <section>
         <SectionTitle title="应用更新" hint="从 GitHub Releases 检查新版本，支持国内镜像加速下载" />
         <Card className="settings-card">
           <div className="setting-row">
@@ -507,7 +503,7 @@ export function SettingsPage({
                   </span>
                 )}
               </label>
-              <p className={`small ${updateError ? "" : "muted"}`}>{updateHint}</p>
+              <p className={`small ${displayError ? "" : "muted"}`}>{updateHint}</p>
               {installing && (
                 <div className="update-progress">
                   <ProgressBar value={progressPercent} />
@@ -568,7 +564,7 @@ export function SettingsPage({
               label="使用国内镜像加速下载"
               hint="优先尝试 ghfast.top / gh-proxy.com 等镜像，失败后自动回退到 GitHub"
             />
-            {updateError && (
+            {displayError && (
               <Button
                 size="sm"
                 variant="quiet"

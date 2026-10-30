@@ -216,6 +216,15 @@ export function Spinner({ label }: { label?: string }) {
 
 /* ------------------------------- checkbox ------------------------------- */
 
+type CheckboxProps = Omit<React.LabelHTMLAttributes<HTMLLabelElement>, "onChange"> & {
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  label: ReactNode;
+  hint?: ReactNode;
+  disabled?: boolean;
+  className?: string;
+};
+
 export function Checkbox({
   checked,
   onChange,
@@ -223,16 +232,13 @@ export function Checkbox({
   hint,
   disabled,
   className = "",
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: ReactNode;
-  hint?: ReactNode;
-  disabled?: boolean;
-  className?: string;
-}) {
+  ...rest
+}: CheckboxProps) {
   return (
-    <label className={`check ${checked ? "is-checked" : ""} ${disabled ? "is-disabled" : ""} ${className}`}>
+    <label
+      {...rest}
+      className={`check ${checked ? "is-checked" : ""} ${disabled ? "is-disabled" : ""} ${className}`}
+    >
       <input
         type="checkbox"
         checked={checked}

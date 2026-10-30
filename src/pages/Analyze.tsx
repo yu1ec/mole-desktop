@@ -15,6 +15,7 @@ import type { AnalyzeReport } from "../types";
 import { Button, Card, EmptyState, Spinner, useToast } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
 import { Treemap } from "../components/Treemap";
+import { usePathMenu } from "../components/ContextMenu";
 
 function breadcrumbs(path: string): { label: string; value: string }[] {
   const sep = path.includes("\\") ? "\\" : "/";
@@ -38,6 +39,7 @@ const ANALYZE_TTL = 30_000;
 
 export function Analyze() {
   const toast = useToast();
+  const pathMenu = usePathMenu();
   const [shortcuts, setShortcuts] = useState<[string, string][]>([]);
   const [input, setInput] = useState(lastAnalyzed);
   const [report, setReport] = useState<AnalyzeReport | null>(() =>
@@ -158,7 +160,14 @@ export function Analyze() {
               {crumbs.map((crumb, index) => (
                 <span key={crumb.value} className="crumb-wrap">
                   {index > 0 && <ChevronRight size={13} />}
-                  <button onClick={() => analyze(crumb.value)}>{crumb.label}</button>
+                  <button
+                    onClick={() => analyze(crumb.value)}
+                    onContextMenu={(event) =>
+                      pathMenu(event, crumb.value, { isDir: true })
+                    }
+                  >
+                    {crumb.label}
+                  </button>
                 </span>
               ))}
             </div>
@@ -197,7 +206,13 @@ export function Analyze() {
                     <Spinner label="扫描中…" />
                   </div>
                 ) : (
-                  <Treemap entries={report.entries} onOpen={(entry) => analyze(entry.path)} />
+                  <Treemap
+                    entries={report.entries}
+                    onOpen={(entry) => analyze(entry.path)}
+                    onContextMenu={(event, entry) =>
+                      pathMenu(event, entry.path, { isDir: entry.isDir })
+                    }
+                  />
                 )}
               </Card>
 
@@ -226,6 +241,9 @@ export function Analyze() {
                       className="size-row"
                       onClick={() =>
                         entry.isDir ? analyze(entry.path) : api.reveal(entry.path).catch(() => {})
+                      }
+                      onContextMenu={(event) =>
+                        pathMenu(event, entry.path, { isDir: entry.isDir })
                       }
                       title={entry.path}
                     >
@@ -257,6 +275,7 @@ export function Analyze() {
                   key={file.path}
                   className="large-file-row"
                   onClick={() => api.reveal(file.path).catch(() => toast("无法打开文件", "error"))}
+                  onContextMenu={(event) => pathMenu(event, file.path, { isDir: false })}
                 >
                   <span>{file.name}</span>
                   <em>{formatBytes(file.size)}</em>

@@ -13,6 +13,7 @@ import { api } from "../api";
 import { formatBytes } from "../format";
 import type { CleanDetail, CleanEntry, EntryTrashResult } from "../types";
 import { Button, EmptyState, Modal, Spinner, useToast } from "./ui";
+import { usePathMenu } from "./ContextMenu";
 import { revealLabel, trashName, usePlatform } from "../platform";
 
 // Browsing one directory level at a time keeps each request cheap; remembering
@@ -67,6 +68,7 @@ export function CleanDetailModal({
   onClose: () => void;
 }) {
   const toast = useToast();
+  const pathMenu = usePathMenu();
   const platform = usePlatform();
   const trash = trashName(platform);
   const [path, setPath] = useState<string | null>(source.initialPath ?? null);
@@ -222,6 +224,11 @@ export function CleanDetailModal({
                 <button
                   onClick={() => setPath(crumb.path)}
                   disabled={index === detail.crumbs.length - 1}
+                  onContextMenu={
+                    crumb.path
+                      ? (event) => pathMenu(event, crumb.path!, { isDir: true })
+                      : undefined
+                  }
                 >
                   {crumb.label}
                 </button>
@@ -234,7 +241,12 @@ export function CleanDetailModal({
           <div className="clean-detail-roots">
             <span>清理根目录</span>
             {detail.roots.map((root, index) => (
-              <button key={root} onClick={() => setPath(root)} title={root}>
+              <button
+                key={root}
+                onClick={() => setPath(root)}
+                onContextMenu={(event) => pathMenu(event, root, { isDir: true })}
+                title={root}
+              >
                 {detail.rootsDisplay[index] ?? root}
               </button>
             ))}
@@ -274,6 +286,11 @@ export function CleanDetailModal({
                     <div
                       key={entry.path}
                       className={`clean-detail-row ${entry.isDir ? "is-dir" : ""} ${deleted ? "is-deleted" : ""}`}
+                      onContextMenu={
+                        deleted
+                          ? undefined
+                          : (event) => pathMenu(event, entry.path, { isDir: entry.isDir })
+                      }
                     >
                       <button
                         className="clean-detail-open"

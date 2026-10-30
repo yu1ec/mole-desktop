@@ -28,6 +28,8 @@ pub fn run() {
             commands::clean::delete_clean_entry,
             commands::clean::run_clean,
             commands::clean::reveal_path,
+            commands::clean::open_path,
+            commands::clean::path_is_dir,
             commands::clean::home_dir,
             commands::clean::list_installers,
             commands::clean::delete_installers,

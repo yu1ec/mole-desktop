@@ -9,8 +9,8 @@ use crate::rules;
 use crate::state::AppState;
 use crate::store::push_history;
 use crate::util::{
-    allocated_size, deny_reason, expand_tilde, free_space, home, now_rfc3339, os_open, remove_path,
-    trash_entry,
+    allocated_size, deny_reason, expand_tilde, free_space, home, now_rfc3339, os_open,
+    remove_path, reveal_in_file_manager, trash_entry,
 };
 
 #[tauri::command(async)]
@@ -83,7 +83,24 @@ pub fn run_clean(
 
 #[tauri::command]
 pub fn reveal_path(path: String) -> Result<(), String> {
+    reveal_in_file_manager(&expand_tilde(&path))
+}
+
+/// Opens a file with its default application (or a directory in the file manager).
+#[tauri::command]
+pub fn open_path(path: String) -> Result<(), String> {
     os_open(&expand_tilde(&path))
+}
+
+/// Whether `path` is a directory, or `None` when it no longer exists.
+///
+/// The UI uses this to hide "打开" for directories, since that action means
+/// opening a file with its default app.
+#[tauri::command]
+pub fn path_is_dir(path: String) -> Option<bool> {
+    std::fs::symlink_metadata(expand_tilde(&path))
+        .ok()
+        .map(|meta| meta.is_dir())
 }
 
 #[tauri::command]

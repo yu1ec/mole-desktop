@@ -22,6 +22,7 @@ import {
   useToast,
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
+import { usePathMenu } from "../components/ContextMenu";
 import { revealLabel, trashName, usePlatform } from "../platform";
 
 const KIND_LABEL: Record<string, string> = {
@@ -40,6 +41,7 @@ const EMPTY_LEFTOVERS: Leftover[] = [];
 
 export function Uninstall() {
   const toast = useToast();
+  const pathMenu = usePathMenu();
   const platform = usePlatform();
   const trash = trashName(platform);
   const {
@@ -225,6 +227,11 @@ export function Uninstall() {
                   key={app.id}
                   className={`app-row ${active?.id === app.id ? "is-active" : ""}`}
                   onClick={() => setActive(app)}
+                  onContextMenu={
+                    app.path
+                      ? (event) => pathMenu(event, app.path, { isDir: true })
+                      : undefined
+                  }
                 >
                   <span className="app-avatar">{app.name.slice(0, 1).toUpperCase()}</span>
                   <span className="app-row-main">
@@ -258,7 +265,14 @@ export function Uninstall() {
                       {active.version ? `版本 ${active.version}` : "版本未知"}
                       {active.bundleId ? ` · ${active.bundleId}` : ""}
                     </p>
-                    <span className="muted small">
+                    <span
+                      className="muted small"
+                      onContextMenu={
+                        active.path
+                          ? (event) => pathMenu(event, active.path, { isDir: true })
+                          : undefined
+                      }
+                    >
                       {active.path || "未记录安装位置"} · 最近修改 {relativeTime(active.lastModified)}
                     </span>
                   </div>
@@ -312,6 +326,7 @@ export function Uninstall() {
                                 })
                               }
                               className="leftover-item"
+                              onContextMenu={(event) => pathMenu(event, item.path)}
                               label={
                                 <span className="leftover-label">
                                   <span>{item.label}</span>

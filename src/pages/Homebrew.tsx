@@ -22,6 +22,7 @@ import {
   Spinner,
   useToast,
 } from "../components/ui";
+import { usePathMenu } from "../components/ContextMenu";
 
 type Tab = "installed" | "outdated" | "taps";
 
@@ -36,6 +37,7 @@ function packageLabel(pkg: BrewPackage): string {
 
 export function Homebrew() {
   const toast = useToast();
+  const pathMenu = usePathMenu();
   const {
     data,
     loading,
@@ -333,7 +335,11 @@ export function Homebrew() {
                   </p>
                 ) : (
                   filteredTaps.map((tap) => (
-                    <div className="brew-row" key={tap.name}>
+                    <div
+                      className="brew-row"
+                      key={tap.name}
+                      onContextMenu={(event) => pathMenu(event, tap.path, { isDir: true })}
+                    >
                       <span className={`brew-kind ${tap.official ? "formula" : "tap"}`}>
                         {tap.official ? "官方" : "Tap"}
                       </span>

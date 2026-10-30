@@ -15,6 +15,7 @@ import {
 } from "../components/ui";
 import { PermissionNotice } from "../components/PermissionNotice";
 import { CleanDetailModal, clearCleanDetailCache } from "../components/CleanDetailModal";
+import { usePathMenu } from "../components/ContextMenu";
 import { trashName, usePlatform } from "../platform";
 
 const EMPTY_ARTIFACTS: ProjectArtifact[] = [];
@@ -22,6 +23,7 @@ const EMPTY_ROOTS: string[] = [];
 
 export function Projects() {
   const toast = useToast();
+  const pathMenu = usePathMenu();
   const trash = trashName(usePlatform());
   const {
     data,
@@ -134,7 +136,12 @@ export function Projects() {
             <span className="muted small">未配置扫描目录，可在设置中调整</span>
           ) : (
             roots.map((root) => (
-              <span className="chip" key={root} title={root}>
+              <span
+                className="chip"
+                key={root}
+                title={root}
+                onContextMenu={(event) => pathMenu(event, root, { isDir: true })}
+              >
                 {root.replace(/^.*[\\/]/, "")}
               </span>
             ))
@@ -214,6 +221,7 @@ export function Projects() {
                           })
                         }
                         className="artifact-row"
+                        onContextMenu={(event) => pathMenu(event, item.path, { isDir: true })}
                         label={
                           <span className="artifact-label">
                             <span className="artifact-kind">{item.kind}</span>

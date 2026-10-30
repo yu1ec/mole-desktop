@@ -90,6 +90,8 @@ export const api = {
   downloadAndInstallUpdate: (accelerate: boolean) =>
     invoke<UpdateInstallResult>("download_and_install_update", { accelerate }),
   reveal: (path: string) => invoke<void>("reveal_path", { path }),
+  openPath: (path: string) => invoke<void>("open_path", { path }),
+  pathIsDir: (path: string) => invoke<boolean | null>("path_is_dir", { path }),
   restoreTrashedEntry: (path: string) => invoke<void>("restore_trashed_entry", { path }),
   openExternal: (path: string) => invoke<void>("open_external", { path }),
   openDataDir: () => invoke<void>("open_data_dir"),

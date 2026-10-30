@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Download, Sparkles, X } from "lucide-react";
 import { Sidebar } from "./components/Sidebar";
 import { Button, Modal, ToastProvider } from "./components/ui";
+import { ContextMenuProvider } from "./components/ContextMenu";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { MarkdownView } from "./components/MarkdownView";
 import { notesFor, type ReleaseNotes } from "./changelog";
 import { api } from "./api";
@@ -38,9 +39,6 @@ export default function App() {
   const [dismissedVersion, setDismissedVersion] = useState<string | null>(null);
   // 用户选择「本次不更新」的版本会记住，只有出现更新的版本时才再次提醒。
   const [skippedVersion, setSkippedVersion] = useState<string | null>(readSkippedVersion);
-  const [installRequest, setInstallRequest] = useState<{ version: string; token: number } | null>(
-    null,
-  );
   const [changelog, setChangelog] = useState<ReleaseNotes | null>(null);
   const platform = snapshot?.platform ?? detectPlatform();
   const updateAvailable = Boolean(
@@ -115,13 +113,6 @@ export default function App() {
     return () => document.removeEventListener("keydown", blockSelectAll);
   }, []);
 
-  // 点击通知里的「立即更新」：跳到设置页的更新区域并自动开始下载安装。
-  const startUpdate = () => {
-    if (!update?.latestVersion) return;
-    setInstallRequest({ version: update.latestVersion, token: Date.now() });
-    setPage("settings");
-  };
-
   const skipVersion = (version: string | null) => {
     if (!version) return;
     setSkippedVersion(version);
@@ -132,94 +123,64 @@ export default function App() {
     }
   };
 
-  const clearInstallRequest = useCallback(() => setInstallRequest(null), []);
-
   return (
     <PlatformProvider platform={platform}>
       <ToastProvider>
-        <div className={`app platform-${platform}`}>
-          <Sidebar
-            page={page}
-            onNavigate={setPage}
-            snapshot={snapshot}
-            updateAvailable={updateAvailable}
-          />
-          <main className="main">
-            {page !== "settings" &&
-              updateAvailable &&
-              update?.latestVersion !== dismissedVersion && (
-                <div className="update-banner-wrap">
-                  <div className="update-banner" role="status">
-                    <span className="update-banner-icon">
-                      <Sparkles size={16} />
-                    </span>
-                    <div className="update-banner-copy">
-                      <strong>发现新版本 v{update?.latestVersion}</strong>
-                      <span>当前版本 v{update?.currentVersion}</span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      icon={<Download size={14} />}
-                      onClick={startUpdate}
-                    >
-                      立即更新
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="quiet"
-                      onClick={() => skipVersion(update?.latestVersion ?? null)}
-                    >
-                      本次不更新
-                    </Button>
-                    <button
-                      className="update-banner-close"
-                      aria-label="稍后提醒"
-                      onClick={() => setDismissedVersion(update?.latestVersion ?? null)}
-                    >
-                      <X size={15} />
-                    </button>
+        <ContextMenuProvider>
+          <div className={`app platform-${platform}`}>
+            <Sidebar
+              page={page}
+              onNavigate={setPage}
+              snapshot={snapshot}
+              updateAvailable={updateAvailable}
+            />
+            <main className="main">
+              {page !== "settings" &&
+                updateAvailable &&
+                update &&
+                update.latestVersion !== dismissedVersion && (
+                  <div className="update-banner-wrap">
+                    <UpdateBanner
+                      update={update}
+                      onSkip={skipVersion}
+                      onDismiss={setDismissedVersion}
+                    />
                   </div>
-                </div>
+                )}
+              {page === "dashboard" && <Dashboard onNavigate={setPage} />}
+              {page === "clean" && <Clean />}
+              {page === "uninstall" && <Uninstall />}
+              {page === "configs" && <Configs />}
+              {page === "brew" && platform !== "windows" && <Homebrew />}
+              {page === "analyze" && <Analyze />}
+              {page === "optimize" && <Optimize />}
+              {page === "monitor" && <Monitor />}
+              {page === "projects" && <Projects />}
+              {page === "installers" && <Installers />}
+              {page === "history" && <HistoryPage />}
+              {page === "changelog" && <ChangelogPage />}
+              {page === "settings" && (
+                <SettingsPage initialUpdate={update} onNavigate={setPage} />
               )}
-            {page === "dashboard" && <Dashboard onNavigate={setPage} />}
-            {page === "clean" && <Clean />}
-            {page === "uninstall" && <Uninstall />}
-            {page === "configs" && <Configs />}
-            {page === "brew" && platform !== "windows" && <Homebrew />}
-            {page === "analyze" && <Analyze />}
-            {page === "optimize" && <Optimize />}
-            {page === "monitor" && <Monitor />}
-            {page === "projects" && <Projects />}
-            {page === "installers" && <Installers />}
-            {page === "history" && <HistoryPage />}
-            {page === "changelog" && <ChangelogPage />}
-            {page === "settings" && (
-              <SettingsPage
-                initialUpdate={update}
-                installRequest={installRequest}
-                onInstallRequestHandled={clearInstallRequest}
-                onNavigate={setPage}
-              />
-            )}
-          </main>
+            </main>
 
-          {changelog && (
-            <Modal
-              open
-              title={`变更记录 v${changelog.version}`}
-              description="更新已完成，来看看这次有哪些变化"
-              onClose={() => setChangelog(null)}
-              footer={
-                <Button variant="primary" onClick={() => setChangelog(null)}>
-                  知道了
-                </Button>
-              }
-            >
-              <MarkdownView source={changelog.body} />
-            </Modal>
-          )}
-        </div>
+            {changelog && (
+              <Modal
+                open
+                title={`变更记录 v${changelog.version}`}
+                description="更新已完成，来看看这次有哪些变化"
+                onClose={() => setChangelog(null)}
+                footer={
+                  <Button variant="primary" onClick={() => setChangelog(null)}>
+                    知道了
+                  </Button>
+                }
+              >
+                <MarkdownView source={changelog.body} />
+              </Modal>
+            )}
+          </div>
+        </ContextMenuProvider>
       </ToastProvider>
     </PlatformProvider>
   );

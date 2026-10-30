@@ -22,6 +22,7 @@ import {
   useToast,
 } from "../components/ui";
 import { CleanDetailModal, clearCleanDetailCache } from "../components/CleanDetailModal";
+import { usePathMenu } from "../components/ContextMenu";
 import { revealLabel, trashName, usePlatform } from "../platform";
 
 const EMPTY_TOOLS: ConfigTool[] = [];
@@ -102,6 +103,7 @@ function toolStatus(tool: ConfigTool) {
 
 export function Configs() {
   const toast = useToast();
+  const pathMenu = usePathMenu();
   const platform = usePlatform();
   const trash = trashName(platform);
   const {
@@ -336,6 +338,9 @@ export function Configs() {
                           path.safety === "keep" ? "is-protected" : ""
                         }`}
                         key={path.path}
+                        onContextMenu={(event) =>
+                          pathMenu(event, path.path, { isDir: path.isDir })
+                        }
                       >
                         <Checkbox
                           className="config-path-check"
