@@ -88,8 +88,10 @@ fn run_brew(brew: &Path, args: &[&str]) -> Result<String, String> {
         .args(args)
         .output()
         .map_err(|err| format!("无法执行 brew {}：{err}", args.join(" ")))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = crate::util::strip_ansi(&stdout).trim().to_string();
+    let stderr = crate::util::strip_ansi(&stderr).trim().to_string();
     if output.status.success() {
         Ok(if stdout.is_empty() { stderr } else { stdout })
     } else {

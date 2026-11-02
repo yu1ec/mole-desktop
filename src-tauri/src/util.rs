@@ -565,14 +565,105 @@ fn libc_geteuid() -> u32 {
         .unwrap_or(1)
 }
 
+/// Removes ANSI escape sequences from command output.
+///
+/// CLIs such as Homebrew emit SGR colour codes (`ESC[31m...ESC[0m`) even when
+/// they are not attached to a terminal, and some wrappers escape the ESC byte
+/// as the literal text `\x1b` (or `\033`, `\e`). Both spellings would show up
+/// verbatim in a `<pre>` block, so normalise them away before the text reaches
+/// the UI.
+pub fn strip_ansi(input: &str) -> String {
+    let chars: Vec<char> = input.chars().collect();
+    let mut out = String::with_capacity(input.len());
+    let mut index = 0;
+    while index < chars.len() {
+        match chars[index] {
+            '\u{1b}' => index = skip_ansi_sequence(&chars, index + 1),
+            '\\' => match literal_escape_len(&chars, index) {
+                Some(len) => index = skip_ansi_sequence(&chars, index + len),
+                None => {
+                    out.push('\\');
+                    index += 1;
+                }
+            },
+            ch => {
+                out.push(ch);
+                index += 1;
+            }
+        }
+    }
+    out
+}
+
+/// Length of a literal ESC spelling starting at `index`: `\x1b`, `\033`, `\e`.
+fn literal_escape_len(chars: &[char], index: usize) -> Option<usize> {
+    let rest = &chars[index..];
+    let at = |offset: usize, expected: char| {
+        rest.get(offset)
+            .map(|ch| ch.eq_ignore_ascii_case(&expected))
+            .unwrap_or(false)
+    };
+    let len = if at(1, 'x') && at(2, '1') && at(3, 'b') {
+        4
+    } else if at(1, '0') && rest.get(2) == Some(&'3') && rest.get(3) == Some(&'3') {
+        4
+    } else if at(1, 'e') {
+        2
+    } else {
+        return None;
+    };
+    // Only treat it as an escape when a CSI/OSC introducer follows, so ordinary
+    // text such as a Windows path (`C:\ecareyu`) is left untouched.
+    match rest.get(len) {
+        Some('[') | Some(']') => Some(len),
+        _ => None,
+    }
+}
+
+/// Skips one escape sequence whose payload starts at `index` (right after the
+/// ESC byte or its literal spelling).
+fn skip_ansi_sequence(chars: &[char], mut index: usize) -> usize {
+    match chars.get(index) {
+        None => index,
+        Some('[') => {
+            index += 1;
+            while let Some(ch) = chars.get(index) {
+                index += 1;
+                if ('\u{40}'..='\u{7e}').contains(ch) {
+                    break;
+                }
+            }
+            index
+        }
+        Some(']') => {
+            // OSC (window titles, hyperlinks) ends with BEL or ST.
+            index += 1;
+            while let Some(ch) = chars.get(index) {
+                index += 1;
+                if *ch == '\u{7}' {
+                    break;
+                }
+                if *ch == '\u{1b}' && chars.get(index) == Some(&'\\') {
+                    index += 1;
+                    break;
+                }
+            }
+            index
+        }
+        Some(_) => index + 1,
+    }
+}
+
 pub fn run_command(program: &str, args: &[&str]) -> Result<String, String> {
     let output = command(program)
         .args(args)
         .output()
         .map_err(|err| format!("{program}: {err}"))?;
-    let mut text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut text = strip_ansi(&stdout).trim().to_string();
     if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let err = strip_ansi(&stderr).trim().to_string();
         if !err.is_empty() {
             text = format!("{text}\n{err}");
         }
@@ -607,6 +698,31 @@ mod tests {
         );
 
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn strip_ansi_removes_escape_codes() {
+        let raw = "\u{1b}[31mError:\u{1b}[0m Refusing to uninstall php";
+        assert_eq!(strip_ansi(raw), "Error: Refusing to uninstall php");
+    }
+
+    #[test]
+    fn strip_ansi_removes_literal_escape_spellings() {
+        assert_eq!(
+            strip_ansi(r"\x1b[31mError:\x1b[0m Refusing to uninstall php"),
+            "Error: Refusing to uninstall php"
+        );
+        assert_eq!(strip_ansi(r"\033[1mbold\033[0m text"), "bold text");
+        assert_eq!(strip_ansi(r"\e[32mok\e[0m"), "ok");
+    }
+
+    #[test]
+    fn strip_ansi_keeps_plain_text() {
+        assert_eq!(
+            strip_ansi("brew uninstall --ignore-dependencies php"),
+            "brew uninstall --ignore-dependencies php"
+        );
+        assert_eq!(strip_ansi(r"C:\Users\ecareyu"), r"C:\Users\ecareyu");
     }
 
     #[test]

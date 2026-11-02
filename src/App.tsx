@@ -113,6 +113,21 @@ export default function App() {
     return () => document.removeEventListener("keydown", blockSelectAll);
   }, []);
 
+  // 桌面应用里屏蔽 WebView 自带的右键菜单（只有 “Reload” 这类浏览器操作），
+  // 页面需要的自定义菜单会自行 preventDefault。输入框和有选中文本时保留系统菜单，
+  // 否则用户无法右键复制/粘贴。
+  useEffect(() => {
+    const blockNativeContextMenu = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable='true']")) return;
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.toString().trim()) return;
+      event.preventDefault();
+    };
+    document.addEventListener("contextmenu", blockNativeContextMenu);
+    return () => document.removeEventListener("contextmenu", blockNativeContextMenu);
+  }, []);
+
   const skipVersion = (version: string | null) => {
     if (!version) return;
     setSkippedVersion(version);
