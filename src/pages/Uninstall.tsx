@@ -150,6 +150,8 @@ export function Uninstall() {
       setResult(data);
       toast(`${active.name} 已处理完成`, "success");
       invalidateCachePrefix("app-leftovers:");
+      // 软件更新列表来自独立扫描，卸载后必须失效，否则会继续显示已删除的应用。
+      invalidateCachePrefix("app-updates");
       setActive(null);
       await refreshApps({ force: true });
     } catch (err) {

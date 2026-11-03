@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AppWindow,
+  ArrowUpCircle,
   Beer,
   FileCog,
   FolderX,
@@ -23,6 +24,7 @@ const KINDS: Record<string, { label: string; icon: typeof Sparkles; tone: string
   optimize: { label: "系统优化", icon: ShieldCheck, tone: "violet" },
   config: { label: "配置清理", icon: FileCog, tone: "amber" },
   brew: { label: "Homebrew", icon: Beer, tone: "teal" },
+  update: { label: "软件更新", icon: ArrowUpCircle, tone: "blue" },
 };
 
 export function HistoryPage() {

@@ -4,6 +4,9 @@ import type {
   AppEntry,
   AppInfo,
   AppRunningInfo,
+  AppUpdateResult,
+  AppUpdateScan,
+  AppUpdateTarget,
   BrewOverview,
   BrewResult,
   BrewTarget,
@@ -65,6 +68,10 @@ export const api = {
   listInstallers: () => invoke<InstallerFile[]>("list_installers"),
   deleteInstallers: (paths: string[]) =>
     invoke<OperationResult>("delete_installers", { paths }),
+
+  scanAppUpdates: () => invoke<AppUpdateScan>("scan_app_updates"),
+  installMas: () => invoke<string>("install_mas"),
+  updateApps: (targets: AppUpdateTarget[]) => invoke<AppUpdateResult>("update_apps", { targets }),
 
   purgeRoots: () => invoke<string[]>("purge_roots"),
   scanProjects: () => invoke<ProjectArtifact[]>("scan_projects"),

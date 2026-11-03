@@ -1,4 +1,6 @@
 mod commands;
+#[cfg(target_os = "macos")]
+mod macos_install;
 mod models;
 mod rules;
 mod state;
@@ -37,6 +39,9 @@ pub fn run() {
             commands::apps::app_running,
             commands::apps::app_leftovers,
             commands::apps::uninstall_app,
+            commands::app_updates::scan_app_updates,
+            commands::app_updates::install_mas,
+            commands::app_updates::update_apps,
             commands::configs::scan_configs,
             commands::configs::config_detail,
             commands::configs::delete_config_entry,

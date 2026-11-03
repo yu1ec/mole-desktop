@@ -386,6 +386,78 @@ pub struct BrewResult {
     pub output: String,
 }
 
+/* ----------------------------- app updates ----------------------------- */
+
+/// macOS 应用包的代码签名状态。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSignatureInfo {
+    /// `official` / `adhoc` / `damaged` / `unsigned`
+    pub state: String,
+    /// 签名身份，例如 `Developer ID Application: ...`。
+    pub signer: Option<String>,
+    pub team_id: Option<String>,
+}
+
+/// 单个已安装软件及其更新渠道信息。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppUpdateEntry {
+    pub id: String,
+    pub name: String,
+    pub path: Option<String>,
+    /// `homebrew` / `appstore` / `sparkle` / `winget` / `store` / `manual`
+    pub channel: String,
+    pub installed_version: String,
+    pub latest_version: Option<String>,
+    pub update_available: bool,
+    pub can_update: bool,
+    pub source: String,
+    pub homepage: Option<String>,
+    /// 额外说明，例如“更新前会退出应用”或更新源不可用。
+    pub note: Option<String>,
+    /// 代码签名状态；仅 macOS 上扫描到本地 `.app` 时才有值。
+    pub signature: Option<AppSignatureInfo>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppUpdateScan {
+    pub apps: Vec<AppUpdateEntry>,
+    pub updatable: usize,
+    pub brew_available: bool,
+    pub mas_available: bool,
+    pub winget_available: bool,
+    pub warnings: Vec<String>,
+    pub platform: String,
+    pub scanned_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppUpdateTarget {
+    pub id: String,
+    pub channel: String,
+    pub source: String,
+    pub name: String,
+    pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppUpdateFailure {
+    pub name: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppUpdateResult {
+    pub ok: Vec<String>,
+    pub failed: Vec<AppUpdateFailure>,
+    pub output: String,
+}
+
 /* ------------------------------- settings ------------------------------ */
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -76,7 +76,7 @@ pub fn app_running(app_id: String) -> AppRunningInfo {
 }
 
 /// PIDs whose executable lives inside `root` (an app bundle or install directory).
-fn running_pids(root: &Path) -> Vec<u32> {
+pub(crate) fn running_pids(root: &Path) -> Vec<u32> {
     use sysinfo::{ProcessesToUpdate, System};
 
     let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
@@ -98,7 +98,7 @@ fn running_pids(root: &Path) -> Vec<u32> {
 /// Ask processes to terminate, then force-kill whatever is still alive.
 /// The current process is never signalled so the uninstall command can finish.
 /// Returns the PIDs that could not be terminated.
-fn terminate_processes(pids: &[u32]) -> Vec<u32> {
+pub(crate) fn terminate_processes(pids: &[u32]) -> Vec<u32> {
     use sysinfo::{Pid, ProcessesToUpdate, Signal, System};
 
     let current = std::process::id();
@@ -561,20 +561,20 @@ mod macos {
 }
 
 #[cfg(windows)]
-mod windows {
+pub(crate) mod windows {
     use super::*;
     use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_32KEY, KEY_WOW64_64KEY};
     use winreg::RegKey;
 
-    struct RawApp {
-        id: String,
-        name: String,
-        version: String,
-        publisher: String,
-        location: String,
-        size: u64,
-        uninstaller: Option<String>,
-        install_date: String,
+    pub(crate) struct RawApp {
+        pub(crate) id: String,
+        pub(crate) name: String,
+        pub(crate) version: String,
+        pub(crate) publisher: String,
+        pub(crate) location: String,
+        pub(crate) size: u64,
+        pub(crate) uninstaller: Option<String>,
+        pub(crate) install_date: String,
     }
 
     fn uninstall_roots() -> Vec<(RegKey, &'static str)> {
@@ -602,7 +602,7 @@ mod windows {
         roots
     }
 
-    fn raw_apps() -> Vec<RawApp> {
+    pub(crate) fn raw_apps() -> Vec<RawApp> {
         let mut apps = Vec::new();
         for (root, hive) in uninstall_roots() {
             for item in root.enum_keys().filter_map(Result::ok) {

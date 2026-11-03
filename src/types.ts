@@ -294,6 +294,81 @@ export interface BrewResult {
   output: string;
 }
 
+/** 软件更新渠道：macOS 为 homebrew / appstore / sparkle，Windows 为 winget / store。 */
+export type AppUpdateChannel =
+  | "homebrew"
+  | "appstore"
+  | "sparkle"
+  | "winget"
+  | "store"
+  | "manual";
+
+/** macOS 应用的代码签名状态。 */
+export type AppSignatureState = "official" | "adhoc" | "damaged" | "unsigned";
+
+export interface AppSignatureInfo {
+  state: AppSignatureState;
+  /** 签名身份，例如 `Developer ID Application: ...`。 */
+  signer: string | null;
+  teamId: string | null;
+}
+
+export interface AppUpdateEntry {
+  id: string;
+  name: string;
+  path: string | null;
+  channel: AppUpdateChannel;
+  installedVersion: string;
+  latestVersion: string | null;
+  updateAvailable: boolean;
+  canUpdate: boolean;
+  /** 渠道内的唯一标识：cask token、App Store ID、winget ID 或应用路径。 */
+  source: string;
+  homepage: string | null;
+  /** 额外说明，例如未能自动安装的原因。 */
+  note: string | null;
+  /** 代码签名状态；仅 macOS 上扫描到本地应用时有值。 */
+  signature: AppSignatureInfo | null;
+}
+
+export interface AppUpdateScan {
+  apps: AppUpdateEntry[];
+  updatable: number;
+  brewAvailable: boolean;
+  masAvailable: boolean;
+  wingetAvailable: boolean;
+  warnings: string[];
+  platform: string;
+  scannedAt: string;
+}
+
+export interface AppUpdateTarget {
+  id: string;
+  channel: string;
+  source: string;
+  name: string;
+  path: string | null;
+}
+
+export interface AppUpdateFailure {
+  name: string;
+  message: string;
+}
+
+export interface AppUpdateResult {
+  ok: string[];
+  failed: AppUpdateFailure[];
+  output: string;
+}
+
+export interface AppUpdateProgress {
+  id: string;
+  name: string;
+  downloaded: number;
+  total: number | null;
+  bytesPerSec: number;
+}
+
 export interface HistoryEntry {
   id: string;
   timestamp: string;
@@ -370,6 +445,7 @@ export type PageKey =
   | "monitor"
   | "projects"
   | "installers"
+  | "updates"
   | "history"
   | "changelog"
   | "settings";

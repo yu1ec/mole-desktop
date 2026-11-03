@@ -1,6 +1,7 @@
 import {
   Activity,
   AppWindow,
+  ArrowUpCircle,
   Beer,
   Brush,
   FileCog,
@@ -31,6 +32,7 @@ const NAV: {
     items: [
       { key: "clean", label: "深度清理", icon: Sparkles },
       { key: "uninstall", label: "应用卸载", icon: AppWindow },
+      { key: "updates", label: "软件更新", icon: ArrowUpCircle, platforms: ["macos", "windows"] },
       { key: "configs", label: "配置管理", icon: FileCog },
       { key: "brew", label: "Homebrew", icon: Beer, platforms: ["macos", "linux"] },
       { key: "optimize", label: "系统优化", icon: ShieldCheck },

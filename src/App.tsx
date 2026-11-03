@@ -18,6 +18,7 @@ import { Optimize } from "./pages/Optimize";
 import { Monitor } from "./pages/Monitor";
 import { Projects } from "./pages/Projects";
 import { Installers } from "./pages/Installers";
+import { AppUpdates } from "./pages/AppUpdates";
 import { HistoryPage } from "./pages/History";
 import { ChangelogPage } from "./pages/Changelog";
 import { SettingsPage } from "./pages/Settings";
@@ -172,6 +173,7 @@ export default function App() {
               {page === "monitor" && <Monitor />}
               {page === "projects" && <Projects />}
               {page === "installers" && <Installers />}
+              {page === "updates" && <AppUpdates />}
               {page === "history" && <HistoryPage />}
               {page === "changelog" && <ChangelogPage />}
               {page === "settings" && (

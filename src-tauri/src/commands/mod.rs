@@ -1,4 +1,5 @@
 pub mod analyze;
+pub mod app_updates;
 pub mod apps;
 pub mod brew;
 pub mod clean;

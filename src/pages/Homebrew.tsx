@@ -10,7 +10,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { api } from "../api";
-import { useCachedQuery } from "../cache";
+import { invalidateCachePrefix, useCachedQuery } from "../cache";
 import { relativeTime } from "../format";
 import type { BrewOverview, BrewPackage, BrewResult, BrewTap } from "../types";
 import {
@@ -100,6 +100,8 @@ export function Homebrew() {
       } else {
         toast(`${label}完成，${data.failed.length} 项失败`, "error");
       }
+      // 升级或卸载 cask 会改变软件更新列表，标记为需要重新扫描。
+      invalidateCachePrefix("app-updates");
       await refresh({ force: true });
     } catch (err) {
       toast(String(err), "error");

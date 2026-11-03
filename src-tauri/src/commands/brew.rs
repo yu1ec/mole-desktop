@@ -15,7 +15,7 @@ use crate::util::now_rfc3339;
 
 /// Finder-launched apps inherit a minimal PATH, so probe the standard
 /// Homebrew locations before falling back to PATH.
-fn discover_brew() -> Option<PathBuf> {
+pub(crate) fn discover_brew() -> Option<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(prefix) = std::env::var_os("HOMEBREW_PREFIX") {
         candidates.push(PathBuf::from(prefix).join("bin/brew"));
@@ -83,7 +83,7 @@ fn tail(text: &str, max: usize) -> String {
     text.chars().skip(count - max).collect()
 }
 
-fn run_brew(brew: &Path, args: &[&str]) -> Result<String, String> {
+pub(crate) fn run_brew(brew: &Path, args: &[&str]) -> Result<String, String> {
     let output = brew_command(brew)
         .args(args)
         .output()
@@ -311,7 +311,7 @@ fn load_overview() -> Result<BrewOverview, String> {
 
 /* ------------------------------- actions ------------------------------- */
 
-fn valid_package_name(name: &str) -> bool {
+pub(crate) fn valid_package_name(name: &str) -> bool {
     !name.is_empty()
         && !name.starts_with('-')
         && name.chars().all(|character| {
