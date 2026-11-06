@@ -11,6 +11,7 @@ import type { PageKey, SystemSnapshot, UpdateCheckResult } from "./types";
 import { Dashboard } from "./pages/Dashboard";
 import { Clean } from "./pages/Clean";
 import { Uninstall } from "./pages/Uninstall";
+import { Manage } from "./pages/Manage";
 import { Configs } from "./pages/Configs";
 import { Homebrew } from "./pages/Homebrew";
 import { Analyze } from "./pages/Analyze";
@@ -166,6 +167,7 @@ export default function App() {
               {page === "dashboard" && <Dashboard onNavigate={setPage} />}
               {page === "clean" && <Clean />}
               {page === "uninstall" && <Uninstall />}
+              {page === "manage" && <Manage />}
               {page === "configs" && <Configs />}
               {page === "brew" && platform !== "windows" && <Homebrew />}
               {page === "analyze" && <Analyze />}

@@ -68,7 +68,7 @@ fn probe_folders(probe: bool) -> Vec<PermissionFolder> {
 /// 完全磁盘访问权限无法通过弹窗申请，只能读取受保护文件来检测。
 /// 读取 TCC.db / 邮件 / Safari 数据失败即视为未授权。
 #[cfg(target_os = "macos")]
-fn has_full_disk_access() -> bool {
+pub(crate) fn has_full_disk_access() -> bool {
     let home = home();
     let probes = [
         home.join("Library/Application Support/com.apple.TCC/TCC.db"),
@@ -143,12 +143,22 @@ pub fn request_file_access() -> Vec<PermissionFolder> {
 pub fn open_privacy_settings(pane: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
-        let anchor = match pane.as_str() {
-            "files-and-folders" => "Privacy_FilesAndFolders",
-            "removable-volumes" => "Privacy_RemovableVolumes",
-            _ => "Privacy_AllFiles",
+        let url = match pane.as_str() {
+            // 登录项在 macOS 13+ 移到了「通用」下面。
+            "login-items" => {
+                "x-apple.systempreferences:com.apple.LoginItems-Settings.extension".to_string()
+            }
+            "files-and-folders" => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders"
+                    .to_string()
+            }
+            "removable-volumes" => {
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_RemovableVolumes"
+                    .to_string()
+            }
+            _ => "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"
+                .to_string(),
         };
-        let url = format!("x-apple.systempreferences:com.apple.preference.security?{anchor}");
         Command::new("open")
             .arg(url)
             .spawn()

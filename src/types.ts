@@ -91,6 +91,12 @@ export interface ProcessInfo {
   cpu: number;
   memory: number;
   exe: string;
+  /** 当前运行的 Mole Desktop 进程，不能被结束。 */
+  isSelf: boolean;
+  /** 当前下行速率（字节/秒）。 */
+  received: number;
+  /** 当前上行速率（字节/秒）。 */
+  transmitted: number;
 }
 
 export type Platform = "macos" | "windows" | "linux";
@@ -434,10 +440,104 @@ export interface DiskPermissionStatus {
   folders: PermissionFolder[];
 }
 
+export interface PrivacyService {
+  service: string;
+  label: string;
+  lastModified: number;
+}
+
+/** 一个应用的 TCC 隐私权限记录。 */
+export interface PrivacyLeftover {
+  id: string;
+  name: string;
+  /** bundle id 或可执行文件路径 */
+  client: string;
+  clientType: number;
+  scope: "user" | "system";
+  path: string | null;
+  services: PrivacyService[];
+  lastModified: number;
+  inTrash: boolean;
+  /** 对应应用或可执行文件是否已经不存在 */
+  invalid: boolean;
+}
+
+export interface PrivacyScan {
+  available: boolean;
+  fullDiskAccess: boolean;
+  apps: PrivacyLeftover[];
+  totalEntries: number;
+  warnings: string[];
+  platform: string;
+  scannedAt: string;
+}
+
+export interface PrivacyTarget {
+  scope: string;
+  client: string;
+  clientType: number;
+}
+
+export interface PrivacyCleanResult {
+  removedApps: number;
+  removedEntries: number;
+  failed: string[];
+  messages: string[];
+  /** 重置系统级记录时取消了管理员授权（仅部分 macOS 版本需要提权） */
+  cancelled: boolean;
+}
+
+/** 一条「登录时打开」或「App 后台活动」项目。 */
+export interface StartupLeftover {
+  id: string;
+  name: string;
+  /** login：登录时打开；background：App 后台活动 */
+  kind: "login" | "background";
+  /** 系统里的具体类型：app / login-item / agent / daemon / ... */
+  itemType: string;
+  developer: string | null;
+  bundleId: string | null;
+  /** 项目指向的应用或可执行文件路径 */
+  path: string | null;
+  /** 可以直接删除的 launchd plist；为空表示需要其他清理方式 */
+  plistPath: string | null;
+  requiresAdmin: boolean;
+  /** 是否可以直接移除（删除 plist 或删除登录项） */
+  removable: boolean;
+  /** 对应应用或可执行文件是否已经不存在 */
+  invalid: boolean;
+  /** 是否可以通过 launchctl 切换启用状态 */
+  canToggle: boolean;
+  /** 当前是否启用；null 表示系统没有提供可读状态 */
+  enabled: boolean | null;
+  note: string | null;
+}
+
+export interface StartupScan {
+  available: boolean;
+  items: StartupLeftover[];
+  warnings: string[];
+  platform: string;
+  scannedAt: string;
+}
+
+export interface StartupTarget {
+  id: string;
+}
+
+export interface StartupCleanResult {
+  removedItems: number;
+  failed: string[];
+  messages: string[];
+  /** 用户取消了系统级 plist 所需的管理员授权 */
+  cancelled: boolean;
+}
+
 export type PageKey =
   | "dashboard"
   | "clean"
   | "uninstall"
+  | "manage"
   | "configs"
   | "brew"
   | "analyze"

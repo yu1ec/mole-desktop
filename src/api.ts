@@ -22,8 +22,15 @@ import type {
   OptimizeResult,
   OptimizeTask,
   PermissionFolder,
+  PrivacyCleanResult,
+  PrivacyScan,
+  PrivacyTarget,
+  ProcessInfo,
   ProjectArtifact,
   Settings,
+  StartupCleanResult,
+  StartupScan,
+  StartupTarget,
   SystemSnapshot,
   UpdateCheckResult,
   UpdateInstallResult,
@@ -31,6 +38,8 @@ import type {
 
 export const api = {
   snapshot: () => invoke<SystemSnapshot>("system_snapshot"),
+  listProcesses: () => invoke<ProcessInfo[]>("list_processes"),
+  killProcess: (pid: number) => invoke<void>("kill_process", { pid }),
 
   scanClean: () => invoke<CleanScan>("scan_clean"),
   cleanItemDetail: (itemId: string, path: string | null) =>
@@ -105,8 +114,19 @@ export const api = {
 
   diskPermission: () => invoke<DiskPermissionStatus>("disk_permission_status"),
   requestFileAccess: () => invoke<PermissionFolder[]>("request_file_access"),
-  openPrivacySettings: (pane: "full-disk-access" | "files-and-folders" | "removable-volumes") =>
-    invoke<void>("open_privacy_settings", { pane }),
+  openPrivacySettings: (
+    pane: "full-disk-access" | "files-and-folders" | "removable-volumes" | "login-items",
+  ) => invoke<void>("open_privacy_settings", { pane }),
   revealApp: () => invoke<void>("reveal_app"),
   restartApp: () => invoke<void>("restart_app"),
+
+  scanPrivacyLeftovers: () => invoke<PrivacyScan>("scan_privacy_leftovers"),
+  cleanPrivacyLeftovers: (targets: PrivacyTarget[]) =>
+    invoke<PrivacyCleanResult>("clean_privacy_leftovers", { targets }),
+
+  scanStartupLeftovers: () => invoke<StartupScan>("scan_startup_leftovers"),
+  cleanStartupLeftovers: (targets: StartupTarget[]) =>
+    invoke<StartupCleanResult>("clean_startup_leftovers", { targets }),
+  setStartupItemEnabled: (id: string, enabled: boolean) =>
+    invoke<string>("set_startup_item_enabled", { id, enabled }),
 };

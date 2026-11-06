@@ -1,6 +1,6 @@
 [package]
 name = "mole-desktop"
-version = "0.15.0"
+version = "0.16.0"
 description = "Cross-platform desktop cleaner and system toolkit"
 authors = ["Mole Desktop"]
 edition = "2021"
@@ -35,6 +35,9 @@ semver = "1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 plist = "1"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSString"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.56"

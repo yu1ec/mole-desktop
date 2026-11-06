@@ -121,6 +121,12 @@ pub struct ProcessInfo {
     pub cpu: f32,
     pub memory: u64,
     pub exe: String,
+    /// 当前正在运行的 Mole Desktop 进程，结束操作会被拒绝。
+    pub is_self: bool,
+    /// 最近一次采样周期内的下行速率（字节/秒）。
+    pub received: u64,
+    /// 最近一次采样周期内的上行速率（字节/秒）。
+    pub transmitted: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -456,6 +462,125 @@ pub struct AppUpdateResult {
     pub ok: Vec<String>,
     pub failed: Vec<AppUpdateFailure>,
     pub output: String,
+}
+
+/* ------------------------------- privacy ------------------------------- */
+
+/// 残留记录里的单个隐私权限。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrivacyService {
+    pub service: String,
+    pub label: String,
+    pub last_modified: i64,
+}
+
+/// 一个应用的隐私权限组。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrivacyLeftover {
+    pub id: String,
+    pub name: String,
+    /// bundle id 或可执行文件路径。
+    pub client: String,
+    pub client_type: i64,
+    /// `user` / `system`，对应记录所在的 TCC 数据库。
+    pub scope: String,
+    /// 应用或可执行文件的已知路径。
+    pub path: Option<String>,
+    pub services: Vec<PrivacyService>,
+    pub last_modified: i64,
+    /// 是否能在废纸篓中找到对应应用。
+    pub in_trash: bool,
+    /// 对应应用或可执行文件是否已经不存在。
+    pub invalid: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrivacyScan {
+    pub available: bool,
+    pub full_disk_access: bool,
+    pub apps: Vec<PrivacyLeftover>,
+    pub total_entries: usize,
+    pub warnings: Vec<String>,
+    pub platform: String,
+    pub scanned_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrivacyTarget {
+    pub scope: String,
+    pub client: String,
+    pub client_type: i64,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrivacyCleanResult {
+    pub removed_apps: usize,
+    pub removed_entries: usize,
+    pub failed: Vec<String>,
+    pub messages: Vec<String>,
+    /// 重置系统级记录时取消了管理员授权（仅部分 macOS 版本需要提权）。
+    pub cancelled: bool,
+}
+
+/* ------------------------------- startup ------------------------------- */
+
+/// 一条「登录时打开」或「App 后台活动」项目。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupLeftover {
+    pub id: String,
+    pub name: String,
+    /// `login`：登录时打开；`background`：App 后台活动。
+    pub kind: String,
+    /// 系统里的具体类型：`app` / `login-item` / `agent` / `daemon` / ...
+    pub item_type: String,
+    pub developer: Option<String>,
+    pub bundle_id: Option<String>,
+    /// 项目指向的应用或可执行文件路径。
+    pub path: Option<String>,
+    /// 可以直接删除的 launchd plist；为空表示需要其他清理方式。
+    pub plist_path: Option<String>,
+    pub requires_admin: bool,
+    /// 是否可以直接移除（删除 plist 或删除登录项）。
+    pub removable: bool,
+    /// 对应应用或可执行文件是否已经不存在。
+    pub invalid: bool,
+    /// 是否可以通过 launchctl 切换启用状态。
+    pub can_toggle: bool,
+    /// 当前是否启用；`None` 表示系统没有提供可读状态。
+    pub enabled: Option<bool>,
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupScan {
+    pub available: bool,
+    pub items: Vec<StartupLeftover>,
+    pub warnings: Vec<String>,
+    pub platform: String,
+    pub scanned_at: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupTarget {
+    pub id: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartupCleanResult {
+    pub removed_items: usize,
+    pub failed: Vec<String>,
+    pub messages: Vec<String>,
+    /// 用户取消了系统级 plist 所需的管理员授权。
+    pub cancelled: bool,
 }
 
 /* ------------------------------- settings ------------------------------ */

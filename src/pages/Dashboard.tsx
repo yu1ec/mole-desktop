@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import {
   Activity,
   AppWindow,
@@ -16,6 +16,7 @@ import { api } from "../api";
 import { formatBytes, formatDate, formatDuration, formatSpeed, percent } from "../format";
 import type { HistoryEntry, PageKey, SystemSnapshot } from "../types";
 import { Button, Card, ProgressBar, Ring, SectionTitle, Spinner } from "../components/ui";
+import { ProcessListModal, type ProcessSortKey } from "../components/ProcessListModal";
 
 const QUICK: { key: PageKey; title: string; hint: string; icon: typeof Sparkles; tone: string }[] = [
   { key: "clean", title: "深度清理", hint: "缓存、日志与残留", icon: Sparkles, tone: "lime" },
@@ -28,6 +29,8 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: PageKey) => void 
   const [snapshot, setSnapshot] = useState<SystemSnapshot | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [error, setError] = useState("");
+  // 点击指标卡片时打开进程列表；null 表示关闭。
+  const [processSort, setProcessSort] = useState<ProcessSortKey | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -73,6 +76,20 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: PageKey) => void 
     },
     { freed: 0 },
   );
+
+  // 让指标卡片可以像按钮一样点击和键盘操作。
+  const processCardProps = (sort: ProcessSortKey) => ({
+    role: "button" as const,
+    tabIndex: 0,
+    title: "查看进程列表",
+    onClick: () => setProcessSort(sort),
+    onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        setProcessSort(sort);
+      }
+    },
+  });
 
   return (
     <div className="page">
@@ -137,7 +154,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: PageKey) => void 
         </Card>
 
         <div className="metric-grid">
-          <Card className="metric">
+          <Card className="metric metric-action" {...processCardProps("cpu")}>
             <div className="metric-head">
               <span className="metric-icon tone-lime">
                 <Cpu size={17} />
@@ -148,7 +165,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: PageKey) => void 
             <ProgressBar value={snapshot.cpuUsage} tone={snapshot.cpuUsage > 80 ? "danger" : "accent"} />
             <small>{snapshot.cpuCores} 个逻辑核心</small>
           </Card>
-          <Card className="metric">
+          <Card className="metric metric-action" {...processCardProps("memory")}>
             <div className="metric-head">
               <span className="metric-icon tone-blue">
                 <MemoryStick size={17} />
@@ -164,7 +181,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: PageKey) => void 
               {formatBytes(snapshot.memoryUsed)} / {formatBytes(snapshot.memoryTotal)}
             </small>
           </Card>
-          <Card className="metric">
+          <Card className="metric metric-action" {...processCardProps("cpu")}>
             <div className="metric-head">
               <span className="metric-icon tone-amber">
                 <HardDrive size={17} />
@@ -175,7 +192,7 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: PageKey) => void 
             <ProgressBar value={disk?.usedPercent ?? 0} tone={(disk?.usedPercent ?? 0) > 90 ? "danger" : "accent"} />
             <small>{disk ? `${formatBytes(disk.free)} 可用 / ${formatBytes(disk.total)}` : "—"}</small>
           </Card>
-          <Card className="metric">
+          <Card className="metric metric-action" {...processCardProps("network")}>
             <div className="metric-head">
               <span className="metric-icon tone-teal">
                 <Activity size={17} />
@@ -279,6 +296,12 @@ export function Dashboard({ onNavigate }: { onNavigate: (page: PageKey) => void 
           ))}
         </Card>
       </section>
+
+      <ProcessListModal
+        open={processSort !== null}
+        initialSort={processSort ?? "cpu"}
+        onClose={() => setProcessSort(null)}
+      />
     </div>
   );
 }

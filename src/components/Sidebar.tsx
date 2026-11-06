@@ -13,6 +13,7 @@ import {
   ScrollText,
   Settings,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   HardDrive,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const NAV: {
     items: [
       { key: "clean", label: "深度清理", icon: Sparkles },
       { key: "uninstall", label: "应用卸载", icon: AppWindow },
+      { key: "manage", label: "启动项与权限", icon: SlidersHorizontal, platforms: ["macos"] },
       { key: "updates", label: "软件更新", icon: ArrowUpCircle, platforms: ["macos", "windows"] },
       { key: "configs", label: "配置管理", icon: FileCog },
       { key: "brew", label: "Homebrew", icon: Beer, platforms: ["macos", "linux"] },

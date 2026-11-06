@@ -7,6 +7,8 @@ pub mod configs;
 pub mod misc;
 pub mod optimize;
 pub mod permissions;
+pub mod privacy;
 pub mod projects;
+pub mod startup;
 pub mod system;
 pub mod update;

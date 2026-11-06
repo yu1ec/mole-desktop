@@ -7,7 +7,9 @@ import {
   FolderX,
   History as HistoryIcon,
   Package,
+  Rocket,
   ShieldCheck,
+  ShieldX,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -25,6 +27,8 @@ const KINDS: Record<string, { label: string; icon: typeof Sparkles; tone: string
   config: { label: "配置清理", icon: FileCog, tone: "amber" },
   brew: { label: "Homebrew", icon: Beer, tone: "teal" },
   update: { label: "软件更新", icon: ArrowUpCircle, tone: "blue" },
+  privacy: { label: "隐私权限", icon: ShieldX, tone: "violet" },
+  startup: { label: "启动项", icon: Rocket, tone: "lime" },
 };
 
 export function HistoryPage() {

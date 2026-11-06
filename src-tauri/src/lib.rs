@@ -25,6 +25,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::system::system_snapshot,
+            commands::system::list_processes,
+            commands::system::kill_process,
             commands::clean::scan_clean,
             commands::clean::clean_item_detail,
             commands::clean::delete_clean_entry,
@@ -75,6 +77,11 @@ pub fn run() {
             commands::permissions::open_privacy_settings,
             commands::permissions::reveal_app,
             commands::permissions::restart_app,
+            commands::privacy::scan_privacy_leftovers,
+            commands::privacy::clean_privacy_leftovers,
+            commands::startup::scan_startup_leftovers,
+            commands::startup::clean_startup_leftovers,
+            commands::startup::set_startup_item_enabled,
             commands::update::check_for_update,
             commands::update::download_and_install_update,
         ])

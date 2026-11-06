@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use sysinfo::{Disks, ProcessesToUpdate};
 
+use crate::commands::apps::terminate_processes;
 use crate::models::{BatteryInfo, DiskInfo, NetworkInfo, ProcessInfo, SystemSnapshot};
 use crate::state::AppState;
 
@@ -24,21 +25,7 @@ pub fn system_snapshot(state: tauri::State<AppState>) -> Result<SystemSnapshot, 
         0.0
     };
 
-    let mut processes: Vec<ProcessInfo> = sys
-        .processes()
-        .iter()
-        .map(|(pid, process)| ProcessInfo {
-            pid: pid.as_u32(),
-            name: process.name().to_string_lossy().to_string(),
-            cpu: process.cpu_usage(),
-            memory: process.memory(),
-            exe: process
-                .exe()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_default(),
-        })
-        .collect();
-    processes.sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap_or(std::cmp::Ordering::Equal));
+    let mut processes = collect_processes(&sys);
     processes.truncate(12);
 
     let uptime = sysinfo::System::uptime();
@@ -80,6 +67,139 @@ pub fn system_snapshot(state: tauri::State<AppState>) -> Result<SystemSnapshot, 
         battery,
         processes,
     })
+}
+
+fn collect_processes(sys: &sysinfo::System) -> Vec<ProcessInfo> {
+    let current = std::process::id();
+    let mut processes: Vec<ProcessInfo> = sys
+        .processes()
+        .iter()
+        .map(|(pid, process)| ProcessInfo {
+            pid: pid.as_u32(),
+            name: process.name().to_string_lossy().to_string(),
+            cpu: process.cpu_usage(),
+            memory: process.memory(),
+            exe: process
+                .exe()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_default(),
+            is_self: pid.as_u32() == current,
+            received: 0,
+            transmitted: 0,
+        })
+        .collect();
+    processes.sort_by(|a, b| {
+        b.cpu
+            .partial_cmp(&a.cpu)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| b.memory.cmp(&a.memory))
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    processes
+}
+
+/// 完整进程列表，默认按 CPU 占用从高到低排序。
+#[tauri::command(async)]
+pub fn list_processes(state: tauri::State<AppState>) -> Result<Vec<ProcessInfo>, String> {
+    let mut sys = state.system.lock().map_err(|e| e.to_string())?;
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    let mut processes = collect_processes(&sys);
+    drop(sys);
+    attach_network_rates(&state, &mut processes);
+    Ok(processes)
+}
+
+/// 读取每个进程的累计网络字节数，键为 PID。
+#[cfg(target_os = "macos")]
+fn process_network_totals() -> Option<std::collections::HashMap<u32, (u64, u64)>> {
+    // -L 1 只输出一次 CSV 采样，开销远小于交互模式。
+    let output = crate::util::command("/usr/bin/nettop")
+        .args(["-P", "-x", "-L", "1", "-J", "bytes_in,bytes_out"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut totals = std::collections::HashMap::new();
+    for line in text.lines().skip(1) {
+        // 形如 `mDNSResponder.239,123,456,`，进程名里可能有小数点，从右侧切分 PID。
+        let mut parts = line.split(',');
+        let Some(label) = parts.next() else { continue };
+        let Some((_, pid)) = label.rsplit_once('.') else { continue };
+        let Ok(pid) = pid.parse::<u32>() else { continue };
+        let received = parts.next().and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        let transmitted = parts.next().and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        totals.insert(pid, (received, transmitted));
+    }
+    Some(totals)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn process_network_totals() -> Option<std::collections::HashMap<u32, (u64, u64)>> {
+    None
+}
+
+/// 用两次累计值之间的差值换算出每个进程当前的上下行速率。
+fn attach_network_rates(state: &AppState, processes: &mut [ProcessInfo]) {
+    let Some(totals) = process_network_totals() else {
+        return;
+    };
+    let now = Instant::now();
+    let Ok(mut baseline) = state.net_process_baseline.lock() else {
+        return;
+    };
+
+    if let Some((at, previous)) = baseline.as_ref() {
+        let elapsed = now.duration_since(*at).as_secs_f64();
+        // 间隔过短会放大采样误差，过长则说明列表已关闭很久，本次只重建基准。
+        if (0.2..=15.0).contains(&elapsed) {
+            for process in processes.iter_mut() {
+                let Some((received, transmitted)) = totals.get(&process.pid) else {
+                    continue;
+                };
+                let (prev_received, prev_transmitted) = previous
+                    .get(&process.pid)
+                    .copied()
+                    .unwrap_or((0, 0));
+                process.received =
+                    (received.saturating_sub(prev_received) as f64 / elapsed) as u64;
+                process.transmitted =
+                    (transmitted.saturating_sub(prev_transmitted) as f64 / elapsed) as u64;
+            }
+        }
+    }
+
+    *baseline = Some((now, totals));
+}
+
+/// 先请求进程正常退出，超时后强制结束。
+#[tauri::command(async)]
+pub fn kill_process(pid: u32) -> Result<(), String> {
+    if pid <= 1 {
+        return Err("系统关键进程不能结束".into());
+    }
+    if pid == std::process::id() {
+        return Err("不能结束 Mole Desktop 自身".into());
+    }
+
+    let target = sysinfo::Pid::from_u32(pid);
+    let mut sys = sysinfo::System::new();
+    sys.refresh_processes(ProcessesToUpdate::All, true);
+    let Some(process) = sys.process(target) else {
+        return Err("进程不存在或已经结束".into());
+    };
+    let name = process.name().to_string_lossy().to_string();
+
+    let remaining = terminate_processes(&[pid]);
+    if remaining.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "无法结束「{name}」（PID {pid}），可能需要管理员权限"
+        ))
+    }
 }
 
 fn disk_list() -> Vec<DiskInfo> {
